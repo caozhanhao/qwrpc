@@ -1,0 +1,6 @@
+[submodule "thirdparty/cpp-httplib"]
+	path = thirdparty/cpp-httplib
+	url = https://github.com/yhirose/cpp-httplib.git
+[submodule "thirdparty/libczh"]
+	path = thirdparty/libczh
+	url = git@github.com:caozhanhao/libczh.git
