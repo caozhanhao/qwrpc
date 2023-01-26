@@ -19,6 +19,7 @@
 #include "utils.hpp"
 #include "libczh/czh.hpp"
 #include "httplib.h"
+#include <future>
 
 namespace qwrpc::client
 {
@@ -26,9 +27,10 @@ namespace qwrpc::client
   {
   private:
     std::string addr;
+    int port;
     httplib::Client cli;
   public:
-    Client(const std::string &addr_) : addr(addr_), cli(addr_) {}
+    Client(const std::string &addr_, int port_) : addr(addr_), port(port_), cli(addr_, port_) {}
     
     
     template<typename ...Rets, typename ...Args>
@@ -41,10 +43,15 @@ namespace qwrpc::client
               {"args", utils::to_str({"args", method::param_to_czh_array(internal_args)})}
           };
       auto res = cli.Get("/qwrpc", params, httplib::Headers{});
-      czh::Czh parser(res->body, czh::InputMode::string);
+      if (res == nullptr)
+      {
+        auto err = res.error();
+        throw error::Error("HTTP error: " + httplib::to_string(err));
+      }
       czh::Node node;
       try
       {
+        czh::Czh parser(res->body, czh::InputMode::string);
         node = parser.parse();
       }
       catch (czh::error::CzhError &err)
@@ -89,12 +96,19 @@ namespace qwrpc::client
         }
         else
         {
-          error::qwrpc_unreachable("Unexpected error: " + err);
+          throw error::Error(err);
         }
       }
       error::qwrpc_assert(node.has_node("return") && node["return"].is<czh::value::Array>());
       auto rets = node["return"].get<czh::value::Array>();
       return method::param_to_tuple<method::TypeList<Rets...>, sizeof...(Rets)>(method::czh_array_to_param(rets));
+    }
+    
+    template<typename ...Rets, typename ...Args>
+    auto async_call(const std::string &method_id, Args &&... args)
+    {
+      return std::async([this](auto &&id, auto &&... args) { return call<Rets...>(id, args...); },
+                        method_id, args...);
     }
   };
 }

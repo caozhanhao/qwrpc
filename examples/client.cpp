@@ -14,10 +14,10 @@
 #include "example.hpp"
 #include "qwrpc/qwrpc.hpp"
 #include <iostream>
-
+#include <future>
 int main()
 {
-  qwrpc::Client cli("127.0.0.1:8765");
+  qwrpc::Client cli("127.0.0.1", 8765);
   auto add_ret = cli.call<int>("add", 1, 1);
   auto[add] = add_ret;
   std::cout << "add: " << add << std::endl;
@@ -25,5 +25,9 @@ int main()
   auto[great] = great_ret;
   std::cout << "great_func: ";
   great.print();
+  auto slow_ret = cli.async_call<int>("slow");
+  std::cout << "slow called." << std::endl;
+  auto[s] = slow_ret.get();
+  std::cout << "slow returned " << s << std::endl;
   return 0;
 }

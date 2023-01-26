@@ -82,5 +82,6 @@ namespace qwrpc::error
   constexpr auto invalid_args_czhtype = "Argument must be a Array.";
   constexpr auto unknown_id = "Unknown method id.";
   constexpr auto invoke_error = "Invoke failed.";
+  constexpr auto unknown_error = "Unknown Error.";
 }
 #endif

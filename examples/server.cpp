@@ -13,9 +13,14 @@
 //   limitations under the License.
 #include "example.hpp"
 #include "qwrpc/qwrpc.hpp"
+#include <thread>
+#include <chrono>
+
+using namespace std::chrono_literals;
+
 int main()
 {
-  qwrpc::Server svr;
+  qwrpc::Server svr(8765);
   svr.register_method("add",
                       [](qwrpc::MethodArgs<int, int> args)
                           -> qwrpc::MethodRets<int>
@@ -30,6 +35,14 @@ int main()
                         auto[a] = args;
                         return qwrpc_example::B{std::to_string(a.get_data() + 1)};
                       });
+  svr.register_method("slow",
+                      [](qwrpc::MethodArgs<> args)
+                          -> qwrpc::MethodRets<int>
+                      {
+                        std::this_thread::sleep_for(1s);
+                        return {0};
+                      });
+  
   svr.start();
   return 0;
 }

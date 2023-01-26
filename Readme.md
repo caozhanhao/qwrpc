@@ -24,12 +24,14 @@ A simple C++ header-only RPC.
 
 ```c++
   qwrpc::Client cli("127.0.0.1:8765");
-  auto add_ret = cli.call<int>("add", 1, 1);
-  auto[add] = add_ret;
+auto add_ret = cli.call<int>("add", 1, 1);
+// or auto add_ret = cli.async_call<int>("add", 1, 1);
+auto[add] = add_ret;
   std::cout << "add: " << add << std::endl; // 2
 ```
 
 - `cli.call<...>` means it returns `qwrpc::MethodRets<...>`(aka. `std::tuple<...>`)
+- `cli.async_call<...>` returns a `std::future<qwrpc::MethodRets<...>>`
 - its arguments (`1, 1`) are the method's arguments, which is the server's `qwrpc::MethodArgs<...>`
 
 ### More

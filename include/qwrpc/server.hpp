@@ -32,14 +32,17 @@ namespace qwrpc::server
   {
   private:
     std::map<std::string, method::Method> methods;
+    int port;
   public:
+    Server(int port_) : port(port_) {}
+  
     template<typename F>
     Server &register_method(const std::string &name, F &&m)
     {
       methods[name] = method::Method(method::make_method(std::forward<F>(m)));
       return *this;
     }
-    
+  
     Server &start()
     {
       httplib::Server svr;
@@ -49,20 +52,22 @@ namespace qwrpc::server
         {
           res.set_content(utils::to_str({{"status",  "failed"},
                                          {"message", error::no_method_id}}), "text/plain");
+          res.status = 500;
           return;
         }
         if (!req.has_param("args"))
         {
           res.set_content(utils::to_str({{"status",  "failed"},
                                          {"message", error::no_args}}), "text/plain");
+          res.status = 500;
           return;
         }
         auto id = req.get_param_value("id");
         auto argstr = req.get_param_value("args");
-        czh::Czh parser(argstr, czh::InputMode::string);
         czh::Node node;
         try
         {
+          czh::Czh parser(argstr, czh::InputMode::string);
           node = parser.parse();
         }
         catch (czh::error::CzhError &err)
@@ -70,6 +75,7 @@ namespace qwrpc::server
           res.set_content(utils::to_str({{"status",    "failed"},
                                          {"message",   error::invalid_args_czh},
                                          {"czh_error", err.get_content()}}), "text/plain");
+          res.status = 500;
           return;
         }
         catch (czh::error::Error &err)
@@ -77,6 +83,7 @@ namespace qwrpc::server
           res.set_content(utils::to_str({{"status",    "failed"},
                                          {"message",   error::invalid_args_czh},
                                          {"czh_error", err.get_content()}}), "text/plain");
+          res.status = 500;
           return;
         }
         
@@ -84,12 +91,14 @@ namespace qwrpc::server
         {
           res.set_content(utils::to_str({{"status",  "failed"},
                                          {"message", error::invalid_args_name}}), "text/plain");
+          res.status = 500;
           return;
         }
         if (!node["args"].is<czh::value::Array>())
         {
           res.set_content(utils::to_str({{"status",  "failed"},
                                          {"message", error::invalid_args_czhtype}}), "text/plain");
+          res.status = 500;
           return;
         }
         auto args = node["args"].get<czh::value::Array>();
@@ -98,6 +107,7 @@ namespace qwrpc::server
         {
           res.set_content(utils::to_str({{"status",  "failed"},
                                          {"message", error::unknown_id}}), "text/plain");
+          res.status = 500;
           return;
         }
         if (!method->second.check_args(args))
@@ -105,6 +115,7 @@ namespace qwrpc::server
           res.set_content(utils::to_str({{"status",        "failed"},
                                          {"message",       error::invalid_args},
                                          {"expected_args", method->second.expected_args()}}), "text/plain");
+          res.status = 500;
           return;
         }
         method::MethodParam ret;
@@ -117,12 +128,21 @@ namespace qwrpc::server
           res.set_content(utils::to_str({{"status",      "failed"},
                                          {"message",     error::invoke_error},
                                          {"qwrpc_error", err.get_content()}}), "text/plain");
+          res.status = 500;
           return;
         }
         res.set_content(utils::to_str({{"status", "success"},
                                        {"return", method::param_to_czh_array(ret)}}), "text/plain");
+        res.status = 200;
       });
-      svr.listen("localhost", 8765);
+      svr.set_exception_handler(
+          [](const auto &req, auto &res, std::exception_ptr ep)
+          {
+            res.set_content(utils::to_str({{"status",  "failed"},
+                                           {"message", error::unknown_error}}), "text/plain");
+            res.status = 500;
+          });
+      svr.listen("localhost", port);
       return *this;
     }
   };
