@@ -8,17 +8,16 @@ A simple C++ header-only RPC.
 ```c++
   qwrpc::Server svr;
 svr.register_method("add",
-qwrpc::make_method([](qwrpc::MethodArgs<int, int> args) -> qwrpc::MethodRets<int>
+[](qwrpc::MethodArgs<int, int> args) -> qwrpc::MethodRets<int>
 {
 auto[rhs, lhs] = args;
 return { rhs + lhs };
-}));
+});
 ```
 
 - `"add"` is the method id.
 - `qwrpc::MethodArgs<...>` is the method's arguments(aka. `std::tuple<...>`)
 - `qwrpc::MethodRets<...>` is the method's return value(aka. `std::tuple<...>`)
-- use `qwrpc::make_method` to convert the lambda to qwrpc::Method
 
 #### Client
 
@@ -65,11 +64,11 @@ custom_type deserialize(const std::string& str)
 
 ```c++
   svr.register_method("example",
-qwrpc::make_method([](qwrpc::MethodArgs<custom_type> args)
+[](qwrpc::MethodArgs<custom_type> args)
 -> qwrpc::MethodRets<custom_type>
 {
 // do something 
-}));
+});
 ```
 
 ##### client

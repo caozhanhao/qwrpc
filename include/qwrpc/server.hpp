@@ -36,7 +36,7 @@ namespace qwrpc::server
     template<typename F>
     Server &register_method(const std::string &name, F &&m)
     {
-      methods[name] = method::Method(std::forward<F>(m));
+      methods[name] = method::Method(method::make_method(std::forward<F>(m)));
       return *this;
     }
     
