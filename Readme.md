@@ -1,19 +1,26 @@
 # qwrpc
-[![License](https://img.shields.io/github/license/caozhanhao/qwrpc?label=License&style=flat-square)](LICENSE)   
-A simple C++ header-only RPC.
+
+[![License](https://img.shields.io/github/license/caozhanhao/qwrpc?label=License&style=flat-square)](LICENSE)
+
+A simple C++ 20 header-only RPC library.
+
+### Setup
+
+- just include the `qwrpc/qwrpc.hpp`!
 
 ### A Simple Example
+
 #### Server
 
 ```c++
   qwrpc::Server svr;
   svr.register_method("add",
-                      [](qwrpc::MethodArgs<int, int> args)
-                          -> qwrpc::MethodRets<int>
-                      {
-                        auto[rhs, lhs] = args;
-                        return {rhs + lhs};
-                      });
+  [](qwrpc::MethodArgs<int, int> args)
+    -> qwrpc::MethodRets<int>
+  {
+    auto[rhs, lhs] = args;     
+    return {rhs + lhs};   
+  });
 ```
 
 - `"add"` is the method id.
@@ -24,9 +31,9 @@ A simple C++ header-only RPC.
 
 ```c++
   qwrpc::Client cli("127.0.0.1:8765");
-auto add_ret = cli.call<int>("add", 1, 1);
-// or auto add_ret = cli.async_call<int>("add", 1, 1);
-auto[add] = add_ret;
+  auto add_ret = cli.call<int>("add", 1, 1);
+  // or use async_call<int>("add", 1, 1);
+  auto[add] = add_ret;
   std::cout << "add: " << add << std::endl; // 2
 ```
 
@@ -61,32 +68,11 @@ specialization of `qwrpc::serializer::serialize()` and `qwrpc::serializer::deser
   }
 ```
 
-- the server and client are similar to previous example, see below
+- the server and client are the same as previous examples.
 
-##### server
+- For more examples, please see [examples](examples/).
 
-```c++
-  svr.register_method("example",
-                      [](qwrpc::MethodArgs<custom_type> args)
-                          -> qwrpc::MethodRets<custom_type>
-                      {
-                        // do something 
-                      });
-```
-
-##### client
-
-```c++
-  auto ret = cli.call<custom_type>("example", custom_type{ "example" });
-```
-
-More examples see [examples](examples/)
-
-### Build
-
-- just `#include "qwrpc/qwrpc.hpp"`
-
-### Dependency
+### Dependencies
 
 - [cpp-httplib](https://github.com/yhirose/cpp-httplib)
 - [libczh](https://github.com/caozhanhao/libczh)
