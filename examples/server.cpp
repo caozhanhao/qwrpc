@@ -11,18 +11,25 @@
 //   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //   See the License for the specific language governing permissions and
 //   limitations under the License.
+#include "example.hpp"
 #include "qwrpc/qwrpc.hpp"
-
 int main()
 {
   qwrpc::Server svr;
   svr.register_method("add",
-                      qwrpc::method([](qwrpc::MethodArgs<int, int> args)
-                                        -> qwrpc::MethodRets<int>
-                                    {
-                                      auto[rhs, lhs] = args;
-                                      return {rhs + lhs};
-                                    }));
+                      qwrpc::make_method([](qwrpc::MethodArgs<int, int> args)
+                                             -> qwrpc::MethodRets<int>
+                                         {
+                                           auto[rhs, lhs] = args;
+                                           return {rhs + lhs};
+                                         }));
+  svr.register_method("great_func",
+                      qwrpc::make_method([](qwrpc::MethodArgs<qwrpc_example::A> args)
+                                             -> qwrpc::MethodRets<qwrpc_example::B>
+                                         {
+                                           auto[a] = args;
+                                           return qwrpc_example::B{std::to_string(a.get_data() + 1)};
+                                         }));
   svr.start();
   return 0;
 }

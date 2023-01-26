@@ -11,14 +11,19 @@
 //   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //   See the License for the specific language governing permissions and
 //   limitations under the License.
+#include "example.hpp"
 #include "qwrpc/qwrpc.hpp"
 #include <iostream>
 
 int main()
 {
   qwrpc::Client cli("127.0.0.1:8765");
-  auto ret = cli.call<int>("add", 1, 1);
-  auto[a] = ret;
-  std::cout << a << std::endl;
+  auto add_ret = cli.call<int>("add", 1, 1);
+  auto[add] = add_ret;
+  std::cout << "add: " << add << std::endl;
+  auto great_ret = cli.call<qwrpc_example::B>("great_func", qwrpc_example::A{2});
+  auto[great] = great_ret;
+  std::cout << "great_func: ";
+  great.print();
   return 0;
 }

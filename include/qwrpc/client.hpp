@@ -15,6 +15,7 @@
 #define QWRPC_CLIENT_HPP
 #pragma once
 
+#include "method.hpp"
 #include "utils.hpp"
 #include "libczh/czh.hpp"
 #include "httplib.h"
@@ -30,14 +31,14 @@ namespace qwrpc::client
     Client(const std::string &addr_) : addr(addr_), cli(addr_) {}
     
     
-    template<utils::MethodRequiredType ...Rets, utils::MethodRequiredType ...Args>
-    utils::MethodRets<Rets...> call(const std::string &method_id, Args &&... args)
+    template<typename ...Rets, typename ...Args>
+    method::MethodRets<Rets...> call(const std::string &method_id, Args &&... args)
     {
-      auto internal_args = utils::tuple_to_czh_array(std::make_tuple(args...));
+      auto internal_args = method::tuple_to_param(std::make_tuple(args...));
       httplib::Params params
           {
               {"id",   method_id},
-              {"args", utils::to_str({"args", internal_args})}
+              {"args", utils::to_str({"args", method::param_to_czh_array(internal_args)})}
           };
       auto res = cli.Get("/qwrpc", params, httplib::Headers{});
       czh::Czh parser(res->body, czh::InputMode::string);
@@ -47,13 +48,53 @@ namespace qwrpc::client
         node = parser.parse();
       }
       catch (czh::error::CzhError &err)
-      {//TODO
+      {
+        qwrpc::error::qwrpc_unreachable("Invalid return czh:" + err.get_content());
       }
       catch (czh::error::Error &err)
-      {//TODO
+      {
+        qwrpc::error::qwrpc_unreachable("Invalid return czh(libczh internal):" + err.get_content());
       }
+      
+      error::qwrpc_assert(node.has_node("status") && node["status"].is<std::string>());
+      if (node["status"].get<std::string>() != "success")
+      {
+        error::qwrpc_assert(node.has_node("message") && node["message"].is<std::string>());
+        auto err = node["message"].get<std::string>();
+        if (err == error::invalid_args)
+        {
+          error::qwrpc_assert(node.has_node("expected_args") && node["expected_args"].is<czh::value::Array>());
+          error::qwrpc_assert(node["expected_args"].get_value().template can_get<std::vector<std::string>>());
+          auto expected = node["expected_args"].get<std::vector<std::string>>();
+          for (auto &r: expected)
+          {
+            err += r + ", ";
+          }
+          if (!expected.empty())
+          {
+            err.pop_back();
+            err.pop_back();
+          }
+          throw error::Error(err);
+        }
+        else if (err == error::invalid_args_czh)
+        {
+          error::qwrpc_assert(node.has_node("czh_error") && node["czh_error"].is<std::string>());
+          throw error::Error(err + "[" + node["czh_error"].get<std::string>() + "]");
+        }
+        else if (err == error::invoke_error)
+        {
+          error::qwrpc_assert(node.has_node("czh_error") && node["qwrpc_error"].is<std::string>());
+          throw error::Error(err + "[" + node["qwrpc_error"].get<std::string>() + "]");
+        }
+        else
+        {
+          error::qwrpc_unreachable("Unexpected error: " + err);
+        }
+      }
+      error::qwrpc_assert(node.has_node("return") && node["return"].is<czh::value::Array>());
       auto rets = node["return"].get<czh::value::Array>();
-      return utils::czh_array_to_tuple < utils::TypeList < Rets...>, sizeof...(Rets) > (rets);
+      return method::param_to_tuple<method::TypeList<Rets...>, sizeof...(Rets)>(method::czh_array_to_param(rets));
     }
   };
 }

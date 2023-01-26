@@ -11,23 +11,30 @@
 //   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 //   See the License for the specific language governing permissions and
 //   limitations under the License.
-#ifndef QWRPC_UTILS_HPP
-#define QWRPC_UTILS_HPP
+#ifndef QWRPC_SERIALIZER_HPP
+#define QWRPC_SERIALIZER_HPP
 #pragma once
 
+#include "utils.hpp"
 #include "libczh/czh.hpp"
-#include <functional>
-#include <sstream>
-#include <tuple>
+#include <system_error>
 
-namespace qwrpc::utils
+namespace qwrpc::serializer
 {
-  std::string to_str(const czh::Node &n)
+  template<typename T>
+  std::string serialize(const T &item)
   {
-    std::stringstream ss;
-    czh::BasicWriter<std::stringstream> bw{ss};
-    n.accept(bw);
-    return ss.str();
+    error::qwrpc_unreachable(
+        "Custom Type must define qwrpc::serializer::serialize() and qwrpc::serializer::deserialize()");
+    return "";
+  }
+  
+  template<typename T>
+  T deserialize(const std::string &str)
+  {
+    error::qwrpc_unreachable(
+        "Custom Type must define qwrpc::serializer::serialize() and qwrpc::serializer::deserialize()");
+    return {};
   }
 }
 #endif

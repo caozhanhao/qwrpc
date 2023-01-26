@@ -17,6 +17,7 @@
 
 #include "error.hpp"
 #include "utils.hpp"
+#include "method.hpp"
 #include "libczh/czh.hpp"
 #include "httplib.h"
 #include <string>
@@ -27,79 +28,15 @@
 
 namespace qwrpc::server
 {
-  template<typename T>
-  struct method_helper;
-  template<typename Ret, typename T, typename... Args>
-  struct method_helper<Ret(T::*)(Args...) const>
-  {
-    using type = std::function<Ret(Args...)>;
-  };
-  
-  template<typename F>
-  typename method_helper<decltype(&F::operator())>::type
-  method(F const &m)
-  {
-    return m;
-  }
-  
-  class Method
-  {
-  private:
-    std::function<czh::value::Array(czh::value::Array)> func;
-    std::vector<size_t> args;
-  public:
-    Method() = default;
-    
-    Method(std::function<czh::value::Array(czh::value::Array)> f, std::vector<size_t> args_)
-        : func(std::move(f)), args(args_) {}
-    
-    bool check_args(const czh::value::Array &call_args) const
-    {
-      if (call_args.size() != args.size()) return false;
-      for (size_t i = 0; i < args.size(); ++i)
-      {
-        if (args[i] != call_args[i].index())
-        {
-          return false;
-        }
-      }
-      return true;
-    }
-    
-    czh::value::Array call(const czh::value::Array &call_args) const
-    {
-      return func(call_args);
-    }
-    
-    czh::value::Array expected_args() const
-    {
-      czh::value::Array ret;
-      for (auto &r: args)
-      {
-        ret.emplace_back(czh::value::details::get_typename(r));
-      }
-      return ret;
-    }
-  };
-  
   class Server
   {
   private:
-    std::map<std::string, Method> methods;
+    std::map<std::string, method::Method> methods;
   public:
-    template<utils::MethodRequiredType ...Args, utils::MethodRequiredType ...Rets>
-    Server &register_method(const std::string &name,
-                            std::function<utils::MethodRets<Rets...>(utils::MethodArgs<Args...>)> m)
+    template<typename F>
+    Server &register_method(const std::string &name, F &&m)
     {
-      auto packed = [m](const czh::value::Array &args) -> czh::value::Array
-      {
-        auto internal_args = utils::czh_array_to_tuple<utils::TypeList<Args...>, sizeof...(Args)>(args);
-        utils::MethodRets<Rets...> internal_ret = m(internal_args);
-        czh::value::Array ret = utils::tuple_to_czh_array(internal_ret);
-        return ret;
-      };
-      auto args = utils::tuple_to_czh_type_index(utils::MethodArgs<Args...>{});
-      methods[name] = Method(std::move(packed), std::move(args));
+      methods[name] = method::Method(std::forward<F>(m));
       return *this;
     }
     
@@ -111,13 +48,13 @@ namespace qwrpc::server
         if (!req.has_param("id"))
         {
           res.set_content(utils::to_str({{"status",  "failed"},
-                                         {"message", "Need id."}}), "text/plain");
+                                         {"message", error::no_method_id}}), "text/plain");
           return;
         }
         if (!req.has_param("args"))
         {
           res.set_content(utils::to_str({{"status",  "failed"},
-                                         {"message", "Need arguments."}}), "text/plain");
+                                         {"message", error::no_args}}), "text/plain");
           return;
         }
         auto id = req.get_param_value("id");
@@ -131,14 +68,14 @@ namespace qwrpc::server
         catch (czh::error::CzhError &err)
         {
           res.set_content(utils::to_str({{"status",    "failed"},
-                                         {"message",   "Argument is not a valid czh."},
+                                         {"message",   error::invalid_args_czh},
                                          {"czh_error", err.get_content()}}), "text/plain");
           return;
         }
         catch (czh::error::Error &err)
         {
           res.set_content(utils::to_str({{"status",    "failed"},
-                                         {"message",   "Argument is not a valid czh.(libczh internal)"},
+                                         {"message",   error::invalid_args_czh},
                                          {"czh_error", err.get_content()}}), "text/plain");
           return;
         }
@@ -146,13 +83,13 @@ namespace qwrpc::server
         if (!node.has_node("args"))
         {
           res.set_content(utils::to_str({{"status",  "failed"},
-                                         {"message", "Arguments must be named 'args'."}}), "text/plain");
+                                         {"message", error::invalid_args_name}}), "text/plain");
           return;
         }
         if (!node["args"].is<czh::value::Array>())
         {
           res.set_content(utils::to_str({{"status",  "failed"},
-                                         {"message", "Argument must be a Array."}}), "text/plain");
+                                         {"message", error::invalid_args_czhtype}}), "text/plain");
           return;
         }
         auto args = node["args"].get<czh::value::Array>();
@@ -160,19 +97,30 @@ namespace qwrpc::server
         if (method == methods.end())
         {
           res.set_content(utils::to_str({{"status",  "failed"},
-                                         {"message", "Unknown method id."}}), "text/plain");
+                                         {"message", error::unknown_id}}), "text/plain");
           return;
         }
         if (!method->second.check_args(args))
         {
           res.set_content(utils::to_str({{"status",        "failed"},
-                                         {"message",       "Invalid argument."},
+                                         {"message",       error::invalid_args},
                                          {"expected_args", method->second.expected_args()}}), "text/plain");
           return;
         }
-        auto ret = method->second.call(args);
+        method::MethodParam ret;
+        try
+        {
+          ret = std::move(method->second.call(method::czh_array_to_param(args)));
+        }
+        catch (error::Error &err)
+        {
+          res.set_content(utils::to_str({{"status",      "failed"},
+                                         {"message",     error::invoke_error},
+                                         {"qwrpc_error", err.get_content()}}), "text/plain");
+          return;
+        }
         res.set_content(utils::to_str({{"status", "success"},
-                                       {"return", ret}}), "text/plain");
+                                       {"return", method::param_to_czh_array(ret)}}), "text/plain");
       });
       svr.listen("localhost", 8765);
       return *this;

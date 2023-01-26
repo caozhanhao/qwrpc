@@ -16,14 +16,20 @@
 #pragma once
 
 #include "client.hpp"
+#include "error.hpp"
+#include "method.hpp"
+#include "serializer.hpp"
 #include "server.hpp"
+#include "utils.hpp"
 
 namespace qwrpc
 {
   using server::Server;
-  using server::method;
-  using utils::MethodArgs;
-  using utils::MethodRets;
+  using method::make_method;
+  using method::MethodArgs;
+  using method::MethodRets;
   using client::Client;
+  using serializer::serialize;
+  using serializer::deserialize;
 }
 #endif
