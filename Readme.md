@@ -7,12 +7,13 @@ A simple C++ header-only RPC.
 
 ```c++
   qwrpc::Server svr;
-svr.register_method("add",
-[](qwrpc::MethodArgs<int, int> args) -> qwrpc::MethodRets<int>
-{
-auto[rhs, lhs] = args;
-return { rhs + lhs };
-});
+  svr.register_method("add",
+                      [](qwrpc::MethodArgs<int, int> args)
+                          -> qwrpc::MethodRets<int>
+                      {
+                        auto[rhs, lhs] = args;
+                        return {rhs + lhs};
+                      });
 ```
 
 - `"add"` is the method id.
@@ -23,9 +24,9 @@ return { rhs + lhs };
 
 ```c++
   qwrpc::Client cli("127.0.0.1:8765");
-auto add_ret = cli.call<int>("add", 1, 1);
-auto[add] = add_ret;
-std::cout << "add: " << add << std::endl; // 2
+  auto add_ret = cli.call<int>("add", 1, 1);
+  auto[add] = add_ret;
+  std::cout << "add: " << add << std::endl; // 2
 ```
 
 - `cli.call<...>` means it returns `qwrpc::MethodRets<...>`(aka. `std::tuple<...>`)
@@ -41,21 +42,21 @@ specialization of `qwrpc::serializer::serialize()` and `qwrpc::serializer::deser
 - serialize
 
 ```c++
-template<>
-std::string serialize(const custom_type& b)
-{
-// do something
-}
+  template<>
+  std::string serialize(const custom_type& b)
+  {
+    // do something
+  }
 ```
 
 - deserialize
 
 ```c++
-template<>
-custom_type deserialize(const std::string& str)
-{
-// do something
-}
+  template<>
+  custom_type deserialize(const std::string& str)
+  {
+    // do something
+  }
 ```
 
 - the server and client are similar to previous example, see below
@@ -64,11 +65,11 @@ custom_type deserialize(const std::string& str)
 
 ```c++
   svr.register_method("example",
-[](qwrpc::MethodArgs<custom_type> args)
--> qwrpc::MethodRets<custom_type>
-{
-// do something 
-});
+                      [](qwrpc::MethodArgs<custom_type> args)
+                          -> qwrpc::MethodRets<custom_type>
+                      {
+                        // do something 
+                      });
 ```
 
 ##### client
