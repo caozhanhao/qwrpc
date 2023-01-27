@@ -55,6 +55,7 @@ namespace qwrpc::error::connector
 }
 namespace qwrpc::connector
 {
+  constexpr int MAGIC = 0x18273645;
 #ifdef _WIN32
   WSADATA qwrpc_wsa_data;
   [[maybe_unused]] int wsa_startup_err = WSAStartup(MAKEWORD(2,2),&qwrpc_wsa_data);
@@ -128,8 +129,8 @@ namespace qwrpc::connector
   
   struct Msg
   {
-    int magic;
-    size_t content_length;
+    int32_t magic;
+    uint64_t content_length;
   };
   
   struct Addr
@@ -214,7 +215,7 @@ namespace qwrpc::connector
     
     void send(const std::string &str) const
     {
-      Msg msg{.magic = 6, .content_length = str.size()};
+      Msg msg{.magic = MAGIC, .content_length = str.size()};
       error::qwrpc_assert(::send(fd, reinterpret_cast<char *>(&msg), sizeof(Msg), 0) >= 0,
                           error::connector::socket_send_error);
       error::qwrpc_assert(::send(fd, str.data(), str.size(), 0) >= 0,
@@ -224,12 +225,13 @@ namespace qwrpc::connector
     std::string recv() const
     {
       Msg msg_recv;
-      error::qwrpc_assert(::recv(fd, reinterpret_cast<char *>(&msg_recv), sizeof(Msg), 0) != -1,
+      error::qwrpc_assert(
+          ::recv(fd, reinterpret_cast<char *>(&msg_recv), sizeof(Msg), 0) == sizeof(Msg)
+          && msg_recv.magic == MAGIC, error::connector::socket_recv_error);
+      std::string recv_result(msg_recv.content_length, 0);
+      error::qwrpc_assert(::recv(fd, &recv_result[0], msg_recv.content_length, 0) == msg_recv.content_length,
                           error::connector::socket_recv_error);
-      std::string recv(msg_recv.content_length, 0);
-      error::qwrpc_assert(::recv(fd, &recv[0], msg_recv.content_length, 0) != -1,
-                          error::connector::socket_recv_error);
-      return recv;
+      return recv_result;
     }
     
     void bind(Addr addr) const
@@ -277,7 +279,10 @@ namespace qwrpc::connector
               while (true)
               {
                 auto request = clnt_socket.recv();
-                if (request == "quit") return;
+                if (request == "quit")
+                {
+                  return;
+                }
                 std::string response;
                 router(request, response);
                 clnt_socket.send(response);
