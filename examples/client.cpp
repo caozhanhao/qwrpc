@@ -17,7 +17,7 @@
 #include <future>
 int main()
 {
-  qwrpc::Client cli("127.0.0.1", 8765);
+  qwrpc::RpcClient cli("127.0.0.1", 8765);
   auto add_ret = cli.call<int>("add", 1, 1);
   auto[add] = add_ret;
   std::cout << "add: " << add << std::endl;

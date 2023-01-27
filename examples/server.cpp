@@ -20,7 +20,7 @@ using namespace std::chrono_literals;
 
 int main()
 {
-  qwrpc::Server svr(8765);
+  qwrpc::RpcServer svr(8765);
   svr.register_method("add",
                       [](qwrpc::MethodArgs<int, int> args)
                           -> qwrpc::MethodRets<int>
@@ -39,7 +39,7 @@ int main()
                       [](qwrpc::MethodArgs<> args)
                           -> qwrpc::MethodRets<int>
                       {
-                        std::this_thread::sleep_for(1s);
+                        std::this_thread::sleep_for(10s);
                         return {0};
                       });
   

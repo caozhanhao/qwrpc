@@ -4,17 +4,19 @@
 
 A simple C++ 20 header-only RPC library.
 
+- Not finished yet.
+
 ### Setup
 
 - just include the `qwrpc/qwrpc.hpp`!
 
 ### A Simple Example
 
-#### Server
+#### RpcServer
 
 ```c++
-  qwrpc::Server svr;
-  svr.register_method("add",
+  qwrpc::RpcServer svr;
+svr.register_method("add",
   [](qwrpc::MethodArgs<int, int> args)
     -> qwrpc::MethodRets<int>
   {
@@ -27,11 +29,11 @@ A simple C++ 20 header-only RPC library.
 - `qwrpc::MethodArgs<...>` is the method's arguments(aka. `std::tuple<...>`)
 - `qwrpc::MethodRets<...>` is the method's return value(aka. `std::tuple<...>`)
 
-#### Client
+#### RpcClient
 
 ```c++
-  qwrpc::Client cli("127.0.0.1:8765");
-  auto add_ret = cli.call<int>("add", 1, 1);
+  qwrpc::RpcClient cli("127.0.0.1:8765");
+auto add_ret = cli.call<int>("add", 1, 1);
   // or use async_call<int>("add", 1, 1);
   auto[add] = add_ret;
   std::cout << "add: " << add << std::endl; // 2
@@ -39,7 +41,7 @@ A simple C++ 20 header-only RPC library.
 
 - `cli.call<...>` means it returns `qwrpc::MethodRets<...>`(aka. `std::tuple<...>`)
 - `cli.async_call<...>` returns a `std::future<qwrpc::MethodRets<...>>`
-- its arguments (`1, 1`) are the method's arguments, which is the server's `qwrpc::MethodArgs<...>`
+- its arguments (`1, 1`) are the method's arguments, which is the rpc_server's `qwrpc::MethodArgs<...>`
 
 ### More
 
@@ -68,12 +70,11 @@ specialization of `qwrpc::serializer::serialize()` and `qwrpc::serializer::deser
   }
 ```
 
-- the server and client are the same as previous examples.
+- the rpc_server and rpc_client are the same as previous examples.
 
 - For more examples, please see [examples](examples/).
 
 ### Dependencies
 
-- [cpp-httplib](https://github.com/yhirose/cpp-httplib)
 - [libczh](https://github.com/caozhanhao/libczh)
 - Requires C++ 20

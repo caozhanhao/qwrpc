@@ -73,15 +73,5 @@ namespace qwrpc::error
       throw Error(detail_, l);
     }
   }
-  
-  constexpr auto no_args = "Need args.";
-  constexpr auto no_method_id = "Need method id.";
-  constexpr auto invalid_args = "Invalid argument.";
-  constexpr auto invalid_args_czh = "Argument is not a valid czh.";
-  constexpr auto invalid_args_name = "Arguments must be named 'args'.";
-  constexpr auto invalid_args_czhtype = "Argument must be a Array.";
-  constexpr auto unknown_id = "Unknown method id.";
-  constexpr auto invoke_error = "Invoke failed.";
-  constexpr auto unknown_error = "Unknown Error.";
 }
 #endif

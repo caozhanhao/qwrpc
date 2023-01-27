@@ -15,20 +15,21 @@
 #define QWRPC_QWRPC_HPP
 #pragma once
 
-#include "client.hpp"
+#include "rpc_client.hpp"
 #include "error.hpp"
 #include "method.hpp"
+#include "connector.hpp"
 #include "serializer.hpp"
-#include "server.hpp"
+#include "rpc_server.hpp"
 #include "utils.hpp"
 
 namespace qwrpc
 {
-  using server::Server;
+  using rpc_server::RpcServer;
   using method::make_method;
   using method::MethodArgs;
   using method::MethodRets;
-  using client::Client;
+  using rpc_client::RpcClient;
   using serializer::serialize;
   using serializer::deserialize;
 }

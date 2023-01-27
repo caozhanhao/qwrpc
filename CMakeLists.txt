@@ -5,7 +5,6 @@ set(CMAKE_CXX_STANDARD 20)
 
 include_directories(include)
 include_directories(thirdparty/libczh/include)
-include_directories(thirdparty/cpp-httplib)
 
 add_executable(qwrpc-server
         examples/server.cpp)
