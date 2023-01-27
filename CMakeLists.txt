@@ -12,5 +12,12 @@ add_executable(qwrpc-client
         examples/client.cpp)
 
 find_package(Threads REQUIRED)
-target_link_libraries(qwrpc-server PUBLIC Threads::Threads)
-target_link_libraries(qwrpc-client PUBLIC Threads::Threads)
+
+if (WIN32)
+    target_link_libraries(qwrpc-server wsock32 ws2_32 Threads::Threads)
+    target_link_libraries(qwrpc-client wsock32 ws2_32 Threads::Threads)
+else ()
+    target_link_libraries(qwrpc-server Threads::Threads)
+    target_link_libraries(qwrpc-client Threads::Threads)
+endif ()
+

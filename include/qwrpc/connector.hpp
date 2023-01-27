@@ -18,9 +18,18 @@
 #include "error.hpp"
 #include <unistd.h>
 #include <sys/types.h>
+
+#ifdef _WIN32
+#include <winsock2.h>
+#pragma comment(lib, "ws2_32.lib")
+#else
+
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
+#endif
+
 #include <cstring>
 #include <functional>
 #include <string>
@@ -46,6 +55,11 @@ namespace qwrpc::error::connector
 }
 namespace qwrpc::connector
 {
+#ifdef _WIN32
+  WSADATA qwrpc_wsa_data;
+  [[maybe_unused]] int wsa_startup_err = WSAStartup(MAKEWORD(2,2),&qwrpc_wsa_data);
+#endif
+  
   class Thpool
   {
   private:
@@ -121,16 +135,20 @@ namespace qwrpc::connector
   struct Addr
   {
     struct sockaddr_in addr;
+#ifdef _WIN32
+    int len;
+#else
     socklen_t len;
+#endif
     
     Addr() : len(sizeof(addr))
     {
-      bzero(&addr, sizeof(addr));
+      std::memset(&addr, 0, sizeof(addr));
     }
     
     Addr(const std::string &ip, int port)
     {
-      bzero(&addr, sizeof(addr));
+      std::memset(&addr, 0, sizeof(addr));
       addr.sin_family = AF_INET;
       addr.sin_addr.s_addr = inet_addr(ip.c_str());
       addr.sin_port = htons(port);
@@ -142,15 +160,27 @@ namespace qwrpc::connector
   class Socket
   {
   private:
+#ifdef _WIN32
+    SOCKET fd;
+#else
     int fd;
+#endif
   public:
     Socket() : fd(-1)
     {
       fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+      int on = 1;
+      setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<char *>(&on), sizeof(on));
       error::qwrpc_assert(fd != -1, error::connector::socket_init_error);
     }
+
+#ifdef _WIN32
+    Socket(SOCKET fd_) : fd(fd_) {}
+#else
     
     Socket(int fd_) : fd(fd_) {}
+
+#endif
     
     Socket(const Socket &) = delete;
     
@@ -168,12 +198,24 @@ namespace qwrpc::connector
       }
     }
     
+    std::tuple<Socket, Addr> accept() const
+    {
+      Addr addr;
+#ifdef _WIN32
+      return {std::move(Socket{::accept(fd, reinterpret_cast<sockaddr *>(&addr.addr),
+                                        reinterpret_cast<int *> (&addr.len))}), addr};
+#else
+      return {std::move(Socket{::accept(fd, reinterpret_cast<sockaddr *>(&addr.addr),
+                                        reinterpret_cast<socklen_t *>(&addr.len))}), addr};
+#endif
+    }
+    
     int get_fd() const { return fd; }
     
     void send(const std::string &str) const
     {
       Msg msg{.magic = 6, .content_length = str.size()};
-      error::qwrpc_assert(::send(fd, &msg, sizeof(Msg), 0) >= 0,
+      error::qwrpc_assert(::send(fd, reinterpret_cast<char *>(&msg), sizeof(Msg), 0) >= 0,
                           error::connector::socket_send_error);
       error::qwrpc_assert(::send(fd, str.data(), str.size(), 0) >= 0,
                           error::connector::socket_send_error);
@@ -182,7 +224,7 @@ namespace qwrpc::connector
     std::string recv() const
     {
       Msg msg_recv;
-      error::qwrpc_assert(::recv(fd, &msg_recv, sizeof(Msg), 0) != -1,
+      error::qwrpc_assert(::recv(fd, reinterpret_cast<char *>(&msg_recv), sizeof(Msg), 0) != -1,
                           error::connector::socket_recv_error);
       std::string recv(msg_recv.content_length, 0);
       error::qwrpc_assert(::recv(fd, &recv[0], msg_recv.content_length, 0) != -1,
@@ -206,12 +248,6 @@ namespace qwrpc::connector
       error::qwrpc_assert(::connect(fd, (sockaddr *) &addr.addr, addr.len) != -1,
                           error::connector::socket_connect_error);
     }
-    
-    std::tuple<Socket, Addr> accept() const
-    {
-      Addr addr;
-      return {std::move(Socket{::accept(fd, (sockaddr *) &addr.addr, (socklen_t *) &addr.len)}), addr};
-    }
   };
   
   class Server
@@ -228,8 +264,6 @@ namespace qwrpc::connector
     void start()
     {
       Socket socket;
-      int on = 1;
-      setsockopt(socket.get_fd(), SOL_SOCKET, SO_REUSEADDR, &on, sizeof(on));
       socket.bind({"127.0.0.1", port});
       socket.listen();
       while (running)
