@@ -139,7 +139,7 @@ namespace qwrpc::method
     template<typename T>
     requires (!std::is_same_v<std::decay_t<T>, MethodParamV> && !std::is_same_v<std::decay_t<T>, std::string>
               && !std::is_base_of_v<Data, std::decay_t<T>>)
-    operator T()
+    T as()
     {
       error::qwrpc_assert(nameof<T>() == type, "Get error type.");
       return serializer::deserialize<T>(data);
@@ -155,7 +155,7 @@ namespace qwrpc::method
     {
       return data;
     }
-    
+  
     std::string get_type() const { return type; }
   };
   
@@ -166,51 +166,74 @@ namespace qwrpc::method
   };
   template<class... Ts> overloaded(Ts...) -> overloaded<Ts...>;
   
-  MethodParam czh_array_to_param(const czh::value::Array &arr)
+  
+  czh::value::Array ret_to_czh_type(const MethodParam &param)
   {
-    MethodParam ret;
-    bool find_null = false;
-    std::string type;
-    for (auto &r: arr)
-    {
-      std::visit(overloaded{
-          [&ret](auto &&item) { ret.emplace_back(item); },
-          [&find_null](czh::value::Null) { find_null = true; },
-          [&ret, &find_null, &type](std::string str)
-          {
-            // Data -> Null + std::string(type) + std::string(data)
-            if (find_null)
-            {
-              if (type.empty())
-              {
-                type = std::move(str);
-                return;
-              }
-              Data data(std::move(str), type);
-              ret.emplace_back(std::move(data));
-              type.clear();
-              find_null = false;
-            }
-            else
-            {
-              ret.emplace_back(str);
-            }
-          }
-      }, r);
-    }
+    error::qwrpc_assert(param.size() == 1);
+    czh::value::Array ret;
+    std::visit(overloaded{
+        [&ret](auto &&item)
+        {
+          ret.emplace_back(item);
+        },
+        [&ret](const Data &item)
+        {
+          ret.emplace_back(czh::value::Null{});
+          ret.emplace_back(item.get_type());
+          ret.emplace_back(item.as_string());
+        },
+    }, param[0]);
     return ret;
   }
   
-  czh::value::Array param_to_czh_array(const MethodParam &param)
+  template<typename T>
+  T ret_get(const czh::value::Array &ret)
   {
+    if constexpr(czh::value::details::index_of_v<T, czh::value::details::BasicVTList> == -1)
+    {
+      error::qwrpc_assert(ret.size() == 3);
+      error::qwrpc_assert(ret[0].index() == czh::value::details::index_of_v<czh::value::Null,
+          czh::value::details::BasicVTList>);
+      error::qwrpc_assert(ret[1].index()
+                          == czh::value::details::index_of_v<std::string,
+          czh::value::details::BasicVTList>);
+      error::qwrpc_assert(std::get<std::string>(ret[1]) == nameof<T>());
+      error::qwrpc_assert(ret[2].index()
+                          == czh::value::details::index_of_v<std::string,
+          czh::value::details::BasicVTList>);
+      return Data(std::get<std::string>(ret[2]), std::string(nameof<T>())).as<T>();
+    }
+    else
+    {
+      error::qwrpc_assert(ret.size() == 1);
+      return std::get<T>(ret[0]);
+    }
+  }
+  
+  template<typename ...Args>
+  auto args_to_czh_array(Args &&...args)
+  {
+    auto tmp = std::make_tuple(args...);
+    // replace CustomType to Data and make tuple a MethodParam
+    auto param = std::apply([](auto &&... elems)
+                            {
+                              return MethodParam{
+                                  static_cast<std::conditional_t<
+                                      index_of_v<std::decay_t<decltype(elems)>, MethodParamList> == -1,
+                                      Data,
+                                      decltype(std::forward<decltype(elems)>(elems))
+                                  >>(elems)...};
+                            }, tmp);
+    
+    // convert MethodParam to czh array
     czh::value::Array ret;
     for (auto &r: param)
     {
       std::visit(overloaded{
           [&ret](auto &&item) { ret.emplace_back(item); },
-          [&ret](const Data &item)
+          [&ret](Data &item)
           {
-            // Data -> Null + std::string(type) + std::string(data)
+            // Data -> Null + std::string[type] + std::string[data]
             ret.emplace_back(czh::value::Null{});
             ret.emplace_back(item.get_type());
             ret.emplace_back(item.as_string());
@@ -220,8 +243,21 @@ namespace qwrpc::method
     return ret;
   }
   
-  template<typename List, std::size_t... index>
-  auto param_to_tuple_helper(const MethodParam &v, std::index_sequence<index...>)
+  template<typename To, typename From>
+  auto data_conv(From &&data)
+  {
+    if constexpr(std::is_same_v<std::decay_t<From>, Data>)
+    {
+      return data.template as<To>();
+    }
+    else
+    {
+      return std::forward<To>(data);
+    }
+  }
+  
+  template<typename F, typename List, std::size_t... index>
+  auto call_with_param_helper(const F &func, const MethodParam &v, std::index_sequence<index...>)
   {
     // convert param to a tuple
     auto tmp = std::make_tuple(
@@ -230,42 +266,28 @@ namespace qwrpc::method
                 Data,
                 index_at_t<index, List>
             >>(v[index])...);
-    // replace Data in tmp with the actual CustomType in List
-    return std::apply([](auto &&... elems)
-                      {
-                        return std::make_tuple(
-                            static_cast<std::conditional_t<
-                                std::is_same_v<std::decay_t<decltype(elems)>, Data>,
-                                index_at_t<index, List>,
-                                decltype(std::forward<decltype(elems)>(elems))
-                            >>(elems)...);
-                      }, tmp);
+    // convert Data in tmp to the actual CustomType in List
+    auto internal_args = std::apply([](auto &&... elems)
+                                    {
+                                      return std::make_tuple(
+                                          data_conv<index_at_t<index, List>>(elems)...);
+                                    }, tmp);
+    return func(std::get<index>(internal_args)...);
   }
   
-  template<typename List, std::size_t N>
-  auto param_to_tuple(const MethodParam &v)
+  template<typename ...Args, typename F>
+  MethodParam call_with_param(F &&func, const MethodParam &v)
   {
-    return param_to_tuple_helper<List>(v, std::make_index_sequence<N>());
+    MethodParam ret;
+    ret.emplace_back(call_with_param_helper<F, TypeList<Args...>>
+                         (std::forward<F>(func), v, std::make_index_sequence<sizeof...(Args)>()));
+    return ret;
   }
   
-  template<typename Tuple>
-  MethodParam tuple_to_param(Tuple &&tuple)
+  template<typename ...Args>
+  auto make_index()
   {
-    // replace CustomType to Data
-    return std::apply([](auto &&... elems)
-                      {
-                        return MethodParam{
-                            static_cast<std::conditional_t<
-                                index_of_v<std::decay_t<decltype(elems)>, MethodParamList> == -1,
-                                Data,
-                                decltype(std::forward<decltype(elems)>(elems))
-                            >>(elems)...};
-                      }, std::forward<Tuple>(tuple));
-  }
-  
-  template<typename Tuple>
-  auto tuple_to_index(Tuple &&tuple)
-  {
+    auto tmp = std::tuple<Args...>();
     // CustomType -> -1
     return std::apply([](auto &&... elems)
                       {
@@ -274,27 +296,7 @@ namespace qwrpc::method
                                 index_of_v<std::decay_t<decltype(elems)>, MethodParamList>,
                                 std::string(nameof<std::decay_t<decltype(elems)>>())
                             }...};
-                      }, std::forward<Tuple>(tuple));
-  }
-  
-  template<typename ...T>
-  using MethodRets = std::tuple<T...>;
-  template<typename ...T>
-  using MethodArgs = std::tuple<T...>;
-  
-  template<typename T>
-  struct make_method_helper;
-  template<typename Ret, typename T, typename... Args>
-  struct make_method_helper<Ret(T::*)(Args...) const>
-  {
-    using type = std::function<Ret(Args...)>;
-  };
-  
-  template<typename F>
-  typename make_method_helper<decltype(&F::operator())>::type
-  make_method(F const &m)
-  {
-    return m;
+                      }, tmp);
   }
   
   class Method
@@ -302,21 +304,15 @@ namespace qwrpc::method
   private:
     std::function<MethodParam(MethodParam)> func;
     std::vector<std::tuple<int, std::string>> args;
+    std::string ret_type;
   public:
     Method() = default;
     
-    template<typename ...Args, typename ...Rets>
-    Method(std::function<MethodRets<Rets...>(MethodArgs<Args...>)> f)
-        :args(tuple_to_index(MethodArgs<Args...>{}))
-    {
-      func = [f](MethodParam args) -> MethodParam
-      {
-        auto internal_args = param_to_tuple<TypeList<Args...>, sizeof...(Args)>(args);
-        auto internal_ret = f(internal_args);
-        auto ret = tuple_to_param(internal_ret);
-        return ret;
-      };
-    }
+    template<typename ...Args, typename Ret>
+    Method(std::function<Ret(Args...)> f)
+        :args(make_index<std::decay_t<Args>...>()),
+         func([f](MethodParam call_args) { return call_with_param<std::decay_t<Args>...>(f, call_args); }),
+         ret_type(nameof<Ret>()) {}
     
     bool check_args(const czh::value::Array &call_args) const
     {
@@ -353,9 +349,44 @@ namespace qwrpc::method
       return true;
     }
     
-    MethodParam call(MethodParam call_args) const
+    bool check_ret(const std::string &ret) const
     {
-      return func(std::move(call_args));
+      return ret == ret_type;
+    }
+    
+    MethodParam call(const czh::value::Array &call_args) const
+    {
+      MethodParam internal_args;
+      bool find_null = false;
+      std::string type;
+      for (auto &r: call_args)
+      {
+        std::visit(overloaded{
+            [&internal_args](auto &&item) { internal_args.emplace_back(item); },
+            [&find_null](czh::value::Null) { find_null = true; },
+            [&internal_args, &find_null, &type](std::string str)
+            {
+              // Data -> Null + std::string(type) + std::string(data)
+              if (find_null)
+              {
+                if (type.empty())
+                {
+                  type = std::move(str);
+                  return;
+                }
+                Data data(std::move(str), type);
+                internal_args.emplace_back(std::move(data));
+                type.clear();
+                find_null = false;
+              }
+              else
+              {
+                internal_args.emplace_back(str);
+              }
+            }
+        }, r);
+      }
+      return func(std::move(internal_args));
     }
     
     czh::value::Array expected_args() const
@@ -366,6 +397,11 @@ namespace qwrpc::method
         ret.emplace_back(std::get<1>(r));
       }
       return ret;
+    }
+    
+    std::string expected_ret() const
+    {
+      return ret_type;
     }
   };
 }

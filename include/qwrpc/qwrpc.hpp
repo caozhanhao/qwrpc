@@ -26,9 +26,6 @@
 namespace qwrpc
 {
   using rpc_server::RpcServer;
-  using method::make_method;
-  using method::MethodArgs;
-  using method::MethodRets;
   using rpc_client::RpcClient;
   using serializer::serialize;
   using serializer::deserialize;

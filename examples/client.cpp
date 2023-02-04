@@ -18,16 +18,13 @@
 int main()
 {
   qwrpc::RpcClient cli("127.0.0.1", 8765);
-  auto add_ret = cli.call<int>("add", 1, 1);
-  auto[add] = add_ret;
-  std::cout << "add: " << add << std::endl;
+  auto add_ret = cli.call<int>("plus", 1, 1);
+  std::cout << "plus: " << add_ret << std::endl;
   auto great_ret = cli.call<qwrpc_example::B>("great_func", qwrpc_example::A{2});
-  auto[great] = great_ret;
   std::cout << "great_func: ";
-  great.print();
+  great_ret.print();
   auto slow_ret = cli.async_call<int>("slow");
   std::cout << "slow called." << std::endl;
-  auto[s] = slow_ret.get();
-  std::cout << "slow returned " << s << std::endl;
+  std::cout << "slow returned " << slow_ret.get() << std::endl;
   return 0;
 }

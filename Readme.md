@@ -15,59 +15,57 @@ A simple C++ 20 header-only RPC library.
 #### RpcServer
 
 ```c++
-  qwrpc::RpcServer svr;
-svr.register_method("add",
-  [](qwrpc::MethodArgs<int, int> args)
-    -> qwrpc::MethodRets<int>
-  {
-    auto[rhs, lhs] = args;     
-    return {rhs + lhs};   
-  });
+  qwrpc::RpcServer svr(8765);
+svr.register_method("plus", std::plus<int>());
+// or 
+svr.register_method("plus",[](int a, int b){ return a + b;});
 ```
 
-- `"add"` is the method id.
-- `qwrpc::MethodArgs<...>` is the method's arguments(aka. `std::tuple<...>`)
-- `qwrpc::MethodRets<...>` is the method's return value(aka. `std::tuple<...>`)
+- `"plus"` is the method id.
 
 #### RpcClient
 
 ```c++
   qwrpc::RpcClient cli("127.0.0.1:8765");
-auto add_ret = cli.call<int>("add", 1, 1);
-  // or use async_call<int>("add", 1, 1);
-  auto[add] = add_ret;
-  std::cout << "add: " << add << std::endl; // 2
+auto add_ret = cli.call<int>("plus", 1, 1);
+// or use async_call<int>("plus", 1, 1);
+std::cout << "plus: " << add_ret << std::endl; // 2
 ```
 
-- `cli.call<...>` means it returns `qwrpc::MethodRets<...>`(aka. `std::tuple<...>`)
-- `cli.async_call<...>` returns a `std::future<qwrpc::MethodRets<...>>`
-- its arguments (`1, 1`) are the method's arguments, which is the rpc_server's `qwrpc::MethodArgs<...>`
+- `cli.call<T>` means it returns `T`)
+- `cli.async_call<...>` returns a `std::future<T>`
 
 ### More
 
 #### Custom Type
 
-`qwrpc::MethodRets<...>` and `qwrpc::MethodArgs<...>` only support `int, long long, double, bool, std::string`, add
-specialization of `qwrpc::serializer::serialize()` and `qwrpc::serializer::deserialize()` to enable more type.
+qwrpc originally only support `int, long long, double, bool, std::string`, add specialization
+of `qwrpc::serializer::serialize()` and `qwrpc::serializer::deserialize()` to enable more type.
 
 - serialize
 
 ```c++
+namespace qwrpc::serializer
+{
   template<>
   std::string serialize(const custom_type& b)
   {
     // do something
   }
+}
 ```
 
 - deserialize
 
 ```c++
+namespace qwrpc::serializer
+{
   template<>
   custom_type deserialize(const std::string& str)
   {
     // do something
   }
+}
 ```
 
 - the rpc_server and rpc_client are the same as previous examples.

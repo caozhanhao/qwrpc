@@ -36,17 +36,18 @@ namespace qwrpc::rpc_client
     {
       cli.connect(addr_, port_);
     }
-    
-    template<typename ...Rets, typename ...Args>
-    method::MethodRets<Rets...> call(const std::string &method_id, Args &&... args)
+  
+    template<typename Ret, typename ...Args>
+    Ret call(const std::string &method_id, Args &&... args)
     {
-      auto internal_args = method::tuple_to_param(std::make_tuple(args...));
+      auto internal_args = method::args_to_czh_array(args...);
       czh::Node params
           {
-              {"id",   method_id},
-              {"args", method::param_to_czh_array(internal_args)}
+              {"id",           method_id},
+              {"expected_ret", std::string(method::nameof<Ret>())},
+              {"args",         internal_args}
           };
-      auto res = cli.send(utils::to_str(params));
+      auto res = cli.send_and_recv(utils::to_str(params));
       error::qwrpc_assert(!res.empty());
       czh::Node node;
       try
@@ -90,6 +91,11 @@ namespace qwrpc::rpc_client
             throw error::Error(err);
           }
         }
+        else if (node.has_node("expected_ret") && node["expected_ret"].is<std::string>())
+        {
+          err += "[" + node["expected_ret"].get<std::string>() + "]";
+          throw error::Error(err);
+        }
         else if (err == error::rpc_server::invoke_error)
         {
           error::qwrpc_assert(node.has_node("czh_error") && node["qwrpc_error"].is<std::string>());
@@ -101,8 +107,8 @@ namespace qwrpc::rpc_client
         }
       }
       error::qwrpc_assert(node.has_node("return") && node["return"].is<czh::value::Array>());
-      auto rets = node["return"].get<czh::value::Array>();
-      return method::param_to_tuple<method::TypeList<Rets...>, sizeof...(Rets)>(method::czh_array_to_param(rets));
+      auto ret = node["return"].get<czh::value::Array>();
+      return method::ret_get<Ret>(ret);
     }
     
     template<typename ...Rets, typename ...Args>

@@ -50,8 +50,8 @@ namespace qwrpc::error::connector
   constexpr auto socket_accept_error = "socket accept error";
   constexpr auto socket_listen_error = "socket listen error";
   constexpr auto socket_connect_error = "socket connect error";
-  constexpr auto socket_recv_error = "socket send error";
-  constexpr auto socket_send_error = "socket send error";
+  constexpr auto socket_recv_error = "socket recv error";
+  constexpr auto socket_send_error = "socket send_and_recv error";
 }
 namespace qwrpc::connector
 {
@@ -306,8 +306,8 @@ namespace qwrpc::connector
     {
       socket.connect({addr, port});
     }
-    
-    std::string send(const std::string &str)
+  
+    std::string send_and_recv(const std::string &str)
     {
       socket.send(str);
       return socket.recv();

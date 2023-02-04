@@ -28,8 +28,9 @@
 
 namespace qwrpc::error::rpc_server
 {
-  constexpr auto invalid_request = "Request need to be a valid czh.";
+  constexpr auto invalid_request = "Request needs to be a valid czh.";
   constexpr auto invalid_argument = "Invalid arguments.";
+  constexpr auto invalid_expected_ret = "Invalid expected_ret.";
   constexpr auto invalid_method_id = "Invalid method id.";
   constexpr auto unknown_id = "Unknown method id.";
   constexpr auto invoke_error = "Invoke failed.";
@@ -48,7 +49,7 @@ namespace qwrpc::rpc_server
     template<typename F>
     RpcServer &register_method(const std::string &name, F &&m)
     {
-      methods[name] = method::Method(method::make_method(std::forward<F>(m)));
+      methods[name] = method::Method(std::function(std::forward<F>(m)));
       return *this;
     }
     
@@ -82,6 +83,12 @@ namespace qwrpc::rpc_server
                                {"message", error::rpc_server::invalid_method_id}});
           return;
         }
+        if (!req.has_node("args") && req["expected_ret"].is<std::string>())
+        {
+          res = utils::to_str({{"status",  "failed"},
+                               {"message", error::rpc_server::invalid_expected_ret}});
+          return;
+        }
         if (!req.has_node("args") && req["args"].is<czh::value::Array>())
         {
           res = utils::to_str({{"status",  "failed"},
@@ -104,10 +111,17 @@ namespace qwrpc::rpc_server
                                {"expected_args", method->second.expected_args()}});
           return;
         }
+        if (!method->second.check_ret(req["expected_ret"].get<std::string>()))
+        {
+          res = utils::to_str({{"status",       "failed"},
+                               {"message",      error::rpc_server::invalid_expected_ret},
+                               {"expected_ret", method->second.expected_ret()}});
+          return;
+        }
         method::MethodParam ret;
         try
         {
-          ret = std::move(method->second.call(method::czh_array_to_param(args)));
+          ret = std::move(method->second.call(args));
         }
         catch (error::Error &err)
         {
@@ -117,7 +131,7 @@ namespace qwrpc::rpc_server
           return;
         }
         res = utils::to_str({{"status", "success"},
-                             {"return", method::param_to_czh_array(ret)}});
+                             {"return", method::ret_to_czh_type(ret)}});
       });
       svr.start();
       return *this;

@@ -21,28 +21,19 @@ using namespace std::chrono_literals;
 int main()
 {
   qwrpc::RpcServer svr(8765);
-  svr.register_method("add",
-                      [](qwrpc::MethodArgs<int, int> args)
-                          -> qwrpc::MethodRets<int>
-                      {
-                        auto[rhs, lhs] = args;
-                        return {rhs + lhs};
-                      });
+  svr.register_method("plus", std::plus<int>());
+  // or svr.register_method("plus", [](int a, int b){return a + b;});
   svr.register_method("great_func",
-                      [](qwrpc::MethodArgs<qwrpc_example::A> args)
-                          -> qwrpc::MethodRets<qwrpc_example::B>
+                      [](qwrpc_example::A a) -> qwrpc_example::B
                       {
-                        auto[a] = args;
                         return qwrpc_example::B{std::to_string(a.get_data() + 1)};
                       });
   svr.register_method("slow",
-                      [](qwrpc::MethodArgs<> args)
-                          -> qwrpc::MethodRets<int>
+                      []() -> int
                       {
                         std::this_thread::sleep_for(10s);
-                        return {0};
+                        return 0;
                       });
-  
   svr.start();
   return 0;
 }
