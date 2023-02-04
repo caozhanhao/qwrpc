@@ -2,9 +2,7 @@
 
 [![License](https://img.shields.io/github/license/caozhanhao/qwrpc?label=License&style=flat-square)](LICENSE)
 
-A simple C++ 20 header-only RPC library.
-
-- Not finished yet.
+A easy-to-use Modern C++ header-only RPC library.
 
 ### Setup
 
@@ -37,10 +35,18 @@ std::cout << "plus: " << add_ret << std::endl; // 2
 
 ### More
 
-#### Custom Type
+#### Type Support
 
-qwrpc originally only support `int, long long, double, bool, std::string`, add specialization
-of `qwrpc::serializer::serialize()` and `qwrpc::serializer::deserialize()` to enable more type.
+qwrpc originally supports
+
+- `int`
+- `long long`
+- `double`
+- `bool`
+- `std::string`
+- types satisfied `std::is_trivially_copyable`
+
+If more types are needed, add specialization `qwrpc::serializer::serialize()` and `qwrpc::serializer::deserialize()`
 
 - serialize
 
@@ -68,9 +74,18 @@ namespace qwrpc::serializer
 }
 ```
 
-- the rpc_server and rpc_client are the same as previous examples.
+#### Register
 
-- For more examples, please see [examples](examples/).
+Any functions satisfied the following rule can be used directly.
+
+- Parameters and return value is the supported types or any types with serializer.
+
+```c++
+  svr.register_method("plus", std::plus<int>());
+svr.register_method("plus",[](int a, int b){ return a + b;});
+```
+
+For more examples, please see [examples](examples/).
 
 ### Dependencies
 

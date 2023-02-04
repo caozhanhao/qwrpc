@@ -49,7 +49,7 @@ namespace qwrpc::error
     {
       return detail;
     }
-    
+  
     //For Unit Test
     bool operator==(const Error &e) const
     {
@@ -57,7 +57,14 @@ namespace qwrpc::error
     }
   };
   
-  auto qwrpc_unreachable(const std::string &detail_ = "", const std::experimental::source_location &l =
+  auto qwrpc_unreachable(const std::string &detail_ = "Unreachable.", const std::experimental::source_location &l =
+  std::experimental::source_location::current())
+  {
+    throw Error(detail_, l);
+  }
+  
+  auto
+  qwrpc_not_implemented(const std::string &detail_ = "Not implemented.", const std::experimental::source_location &l =
   std::experimental::source_location::current())
   {
     throw Error(detail_, l);
@@ -73,5 +80,6 @@ namespace qwrpc::error
       throw Error(detail_, l);
     }
   }
+  
 }
 #endif

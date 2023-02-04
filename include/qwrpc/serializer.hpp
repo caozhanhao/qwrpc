@@ -17,24 +17,65 @@
 
 #include "utils.hpp"
 #include "libczh/czh.hpp"
-#include <system_error>
+#include <type_traits>
 
 namespace qwrpc::serializer
 {
+  namespace detail
+  {
+    struct NotImplemented {};
+    struct TriviallyCopyable {};
+    template<typename T>
+    struct TagDispatch
+    {
+      using tag = std::conditional_t<std::is_trivially_copyable_v<std::decay_t<T>>, TriviallyCopyable, NotImplemented>;
+    };
+    
+    template<typename T>
+    std::string internal_serialize(NotImplemented, const T &item)
+    {
+      error::qwrpc_not_implemented(
+          "Custom Type must define qwrpc::serializer::serialize() and qwrpc::serializer::deserialize()");
+      return "";
+    }
+    
+    template<typename T>
+    T internal_deserialize(NotImplemented, const std::string &str)
+    {
+      error::qwrpc_not_implemented(
+          "Custom Type must define qwrpc::serializer::serialize() and qwrpc::serializer::deserialize()");
+      return {};
+    }
+    
+    template<typename T>
+    std::string internal_serialize(TriviallyCopyable, const T &item)
+    {
+      std::vector<char> ret(sizeof(T));
+      std::memcpy(ret.data(), &item, sizeof(T));
+      std::string str;
+      for (auto &r: ret) { str += r; }
+      return str;
+    }
+    
+    template<typename T>
+    T internal_deserialize(TriviallyCopyable, const std::string &str)
+    {
+      T item;
+      std::memcpy(&item, str.data(), sizeof(T));
+      return item;
+    }
+  }
+  
   template<typename T>
   std::string serialize(const T &item)
   {
-    error::qwrpc_unreachable(
-        "Custom Type must define qwrpc::serializer::serialize() and qwrpc::serializer::deserialize()");
-    return "";
+    return detail::internal_serialize<T>(typename detail::TagDispatch<T>::tag{}, item);
   }
   
   template<typename T>
   T deserialize(const std::string &str)
   {
-    error::qwrpc_unreachable(
-        "Custom Type must define qwrpc::serializer::serialize() and qwrpc::serializer::deserialize()");
-    return {};
+    return detail::internal_deserialize<T>(typename detail::TagDispatch<T>::tag{}, str);
   }
 }
 #endif

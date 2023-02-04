@@ -119,7 +119,10 @@ namespace qwrpc::method
   using MethodParam = std::vector<MethodParamV>;
   
   template<typename T>
-  consteval std::string_view nameof()
+  concept MethodArgRetType = true;
+  
+  template<typename T>
+  consteval std::string_view qwrpc_type_id()
   {
     std::string_view str = std::experimental::source_location::current().function_name();
     auto b = str.find_first_of('<');
@@ -141,13 +144,13 @@ namespace qwrpc::method
               && !std::is_base_of_v<Data, std::decay_t<T>>)
     T as()
     {
-      error::qwrpc_assert(nameof<T>() == type, "Get error type.");
+      error::qwrpc_assert(qwrpc_type_id<T>() == type, "Get error type.");
       return serializer::deserialize<T>(data);
     }
-    
+  
     template<typename T>
     requires (!std::is_same_v<std::decay_t<T>, std::string> && !std::is_base_of_v<Data, std::decay_t<T>>)
-    Data(T &&value): data(serializer::serialize(std::forward<T>(value))), type(nameof<std::decay_t<T>>()) {}
+    Data(T &&value): data(serializer::serialize(std::forward<T>(value))), type(qwrpc_type_id<std::decay_t<T>>()) {}
     
     Data(std::string str, std::string type) : data(std::move(str)), type(std::move(type)) {}
     
@@ -197,11 +200,11 @@ namespace qwrpc::method
       error::qwrpc_assert(ret[1].index()
                           == czh::value::details::index_of_v<std::string,
           czh::value::details::BasicVTList>);
-      error::qwrpc_assert(std::get<std::string>(ret[1]) == nameof<T>());
+      error::qwrpc_assert(std::get<std::string>(ret[1]) == qwrpc_type_id<T>());
       error::qwrpc_assert(ret[2].index()
                           == czh::value::details::index_of_v<std::string,
           czh::value::details::BasicVTList>);
-      return Data(std::get<std::string>(ret[2]), std::string(nameof<T>())).as<T>();
+      return Data(std::get<std::string>(ret[2]), std::string(qwrpc_type_id<T>())).as<T>();
     }
     else
     {
@@ -269,8 +272,7 @@ namespace qwrpc::method
     // convert Data in tmp to the actual CustomType in List
     auto internal_args = std::apply([](auto &&... elems)
                                     {
-                                      return std::make_tuple(
-                                          data_conv<index_at_t<index, List>>(elems)...);
+                                      return std::make_tuple(data_conv<index_at_t<index, List>>(elems)...);
                                     }, tmp);
     return func(std::get<index>(internal_args)...);
   }
@@ -287,16 +289,12 @@ namespace qwrpc::method
   template<typename ...Args>
   auto make_index()
   {
-    auto tmp = std::tuple<Args...>();
     // CustomType -> -1
-    return std::apply([](auto &&... elems)
-                      {
-                        return std::vector<std::tuple<int, std::string>>{
-                            {
-                                index_of_v<std::decay_t<decltype(elems)>, MethodParamList>,
-                                std::string(nameof<std::decay_t<decltype(elems)>>())
-                            }...};
-                      }, tmp);
+    return std::vector<std::tuple<int, std::string>>{
+        {
+            index_of_v<std::decay_t<Args>, MethodParamList>,
+            std::string(qwrpc_type_id<std::decay_t<Args>>())
+        }...};
   }
   
   class Method
@@ -307,12 +305,12 @@ namespace qwrpc::method
     std::string ret_type;
   public:
     Method() = default;
-    
-    template<typename ...Args, typename Ret>
+  
+    template<MethodArgRetType ...Args, MethodArgRetType Ret>
     Method(std::function<Ret(Args...)> f)
         :args(make_index<std::decay_t<Args>...>()),
          func([f](MethodParam call_args) { return call_with_param<std::decay_t<Args>...>(f, call_args); }),
-         ret_type(nameof<Ret>()) {}
+         ret_type(qwrpc_type_id<Ret>()) {}
     
     bool check_args(const czh::value::Array &call_args) const
     {

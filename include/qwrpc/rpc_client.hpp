@@ -44,7 +44,7 @@ namespace qwrpc::rpc_client
       czh::Node params
           {
               {"id",           method_id},
-              {"expected_ret", std::string(method::nameof<Ret>())},
+              {"expected_ret", std::string(method::qwrpc_type_id<Ret>())},
               {"args",         internal_args}
           };
       auto res = cli.send_and_recv(utils::to_str(params));
@@ -79,6 +79,7 @@ namespace qwrpc::rpc_client
           {
             error::qwrpc_assert(node["expected_args"].get_value().template can_get<std::vector<std::string>>());
             auto expected = node["expected_args"].get<std::vector<std::string>>();
+            err += "[expected: ";
             for (auto &r: expected)
             {
               err += r + ", ";
@@ -88,6 +89,7 @@ namespace qwrpc::rpc_client
               err.pop_back();
               err.pop_back();
             }
+            err += "]";
             throw error::Error(err);
           }
         }

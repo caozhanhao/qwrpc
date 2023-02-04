@@ -21,13 +21,23 @@ using namespace std::chrono_literals;
 int main()
 {
   qwrpc::RpcServer svr(8765);
+  // Some functions can be used directly
   svr.register_method("plus", std::plus<int>());
   // or svr.register_method("plus", [](int a, int b){return a + b;});
-  svr.register_method("great_func",
+  
+  // Trivially copyable type don't need to specialize qwrpc::serializer::...
+  svr.register_method("great_func1",
+                      [](qwrpc_example::C c) -> qwrpc_example::D
+                      {
+                        return {c.c + 1};
+                      });
+  // Other type need the specialization, see example.hpp.
+  svr.register_method("great_func2",
                       [](qwrpc_example::A a) -> qwrpc_example::B
                       {
-                        return qwrpc_example::B{std::to_string(a.get_data() + 1)};
+                        return {std::to_string(a.get_data() + 1)};
                       });
+  // async
   svr.register_method("slow",
                       []() -> int
                       {

@@ -12,10 +12,10 @@ namespace qwrpc_example
   private:
     int data;
   public:
-    A() = default;
-    
     A(int i) : data(i) {}
-    
+  
+    ~A() {};// make it not trivially copyable
+  
     int get_data() const { return data; }
   };
   
@@ -24,7 +24,7 @@ namespace qwrpc_example
   private:
     std::string data;
   public:
-    B() = default;
+    ~B() {};// make it not trivially copyable
     
     B(std::string i) : data(i) {}
     
@@ -32,6 +32,9 @@ namespace qwrpc_example
     
     std::string get_data() const { return data; }
   };
+  
+  struct C { int c; };
+  struct D { int d; };
 }
 namespace qwrpc::serializer
 {
