@@ -26,23 +26,33 @@ int main()
   // or svr.register_method("plus", [](int a, int b){return a + b;});
   
   // Trivially copyable type don't need to specialize qwrpc::serializer::...
-  svr.register_method("great_func1",
+  // in example.hpp:
+  //  struct C { int c; };
+  //  struct D { int d; };
+  svr.register_method("foo1",
                       [](qwrpc_example::C c) -> qwrpc_example::D
                       {
                         return {c.c + 1};
                       });
-  // Other type need the specialization, see example.hpp.
-  svr.register_method("great_func2",
-                      [](qwrpc_example::A a) -> qwrpc_example::B
+  // All containers that store serializer type also don't need it.
+  svr.register_method("foo2",
+                      [](std::vector<qwrpc_example::C> c) -> std::vector<std::vector<qwrpc_example::C>>
                       {
-                        return {std::to_string(a.get_data() + 1)};
+                        c.emplace_back(qwrpc_example::C{6});
+                        return {c};
+                      });
+  // Other type need the specialization, see example.hpp.
+  svr.register_method("foo3",
+                      [](qwrpc_example::A a) -> std::vector<qwrpc_example::B>
+                      {
+                        return {qwrpc_example::B{std::to_string(a.get_data() + 1)}};
                       });
   // async
   svr.register_method("slow",
-                      []() -> int
+                      [](std::string a) -> std::string
                       {
                         std::this_thread::sleep_for(10s);
-                        return 0;
+                        return a + " 10 seconds later";
                       });
   svr.start();
   return 0;

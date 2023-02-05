@@ -114,9 +114,7 @@ namespace qwrpc::method
   
   class Data;
   
-  using MethodParamList = TypeList<int, long long, double, bool, std::string, Data>;
-  using MethodParamV = decltype(as_variant(MethodParamList{}));
-  using MethodParam = std::vector<MethodParamV>;
+  using MethodParam = std::vector<Data>;
   
   template<typename T>
   concept MethodArgRetType = true;
@@ -140,8 +138,7 @@ namespace qwrpc::method
     Data() = default;
     
     template<typename T>
-    requires (!std::is_same_v<std::decay_t<T>, MethodParamV> && !std::is_same_v<std::decay_t<T>, std::string>
-              && !std::is_base_of_v<Data, std::decay_t<T>>)
+    requires (!std::is_base_of_v<Data, std::decay_t<T>>)
     T as()
     {
       error::qwrpc_assert(qwrpc_type_id<T>() == type, "Get error type.");
@@ -149,17 +146,14 @@ namespace qwrpc::method
     }
   
     template<typename T>
-    requires (!std::is_same_v<std::decay_t<T>, std::string> && !std::is_base_of_v<Data, std::decay_t<T>>)
+    requires (!std::is_base_of_v<Data, std::decay_t<T>>)
     Data(T &&value): data(serializer::serialize(std::forward<T>(value))), type(qwrpc_type_id<std::decay_t<T>>()) {}
     
     Data(std::string str, std::string type) : data(std::move(str)), type(std::move(type)) {}
-    
-    std::string as_string() const
-    {
-      return data;
-    }
   
     std::string get_type() const { return type; }
+  
+    std::string get_data() const { return data; }
   };
   
   template<class... Ts>
@@ -174,105 +168,55 @@ namespace qwrpc::method
   {
     error::qwrpc_assert(param.size() == 1);
     czh::value::Array ret;
-    std::visit(overloaded{
-        [&ret](auto &&item)
-        {
-          ret.emplace_back(item);
-        },
-        [&ret](const Data &item)
-        {
-          ret.emplace_back(czh::value::Null{});
-          ret.emplace_back(item.get_type());
-          ret.emplace_back(item.as_string());
-        },
-    }, param[0]);
+    ret.emplace_back(param[0].get_type());
+    ret.emplace_back(param[0].get_data());
     return ret;
   }
   
   template<typename T>
   T ret_get(const czh::value::Array &ret)
   {
-    if constexpr(czh::value::details::index_of_v<T, czh::value::details::BasicVTList> == -1)
-    {
-      error::qwrpc_assert(ret.size() == 3);
-      error::qwrpc_assert(ret[0].index() == czh::value::details::index_of_v<czh::value::Null,
-          czh::value::details::BasicVTList>);
-      error::qwrpc_assert(ret[1].index()
-                          == czh::value::details::index_of_v<std::string,
-          czh::value::details::BasicVTList>);
-      error::qwrpc_assert(std::get<std::string>(ret[1]) == qwrpc_type_id<T>());
-      error::qwrpc_assert(ret[2].index()
-                          == czh::value::details::index_of_v<std::string,
-          czh::value::details::BasicVTList>);
-      return Data(std::get<std::string>(ret[2]), std::string(qwrpc_type_id<T>())).as<T>();
-    }
-    else
-    {
-      error::qwrpc_assert(ret.size() == 1);
-      return std::get<T>(ret[0]);
-    }
+    error::qwrpc_assert(ret.size() == 2);
+    error::qwrpc_assert(ret[0].index()
+                        == czh::value::details::index_of_v<std::string,
+        czh::value::details::BasicVTList>);
+    error::qwrpc_assert(std::get<std::string>(ret[0]) == qwrpc_type_id<T>());
+    error::qwrpc_assert(ret[1].index()
+                        == czh::value::details::index_of_v<std::string,
+        czh::value::details::BasicVTList>);
+    return Data(std::get<std::string>(ret[1]), std::string(qwrpc_type_id<T>())).as<T>();
   }
   
   template<typename ...Args>
   auto args_to_czh_array(Args &&...args)
   {
     auto tmp = std::make_tuple(args...);
-    // replace CustomType to Data and make tuple a MethodParam
+    // make tuple a MethodParam
     auto param = std::apply([](auto &&... elems)
                             {
-                              return MethodParam{
-                                  static_cast<std::conditional_t<
-                                      index_of_v<std::decay_t<decltype(elems)>, MethodParamList> == -1,
-                                      Data,
-                                      decltype(std::forward<decltype(elems)>(elems))
-                                  >>(elems)...};
+                              return MethodParam{static_cast<Data>(elems)...};
                             }, tmp);
     
     // convert MethodParam to czh array
     czh::value::Array ret;
     for (auto &r: param)
     {
-      std::visit(overloaded{
-          [&ret](auto &&item) { ret.emplace_back(item); },
-          [&ret](Data &item)
-          {
-            // Data -> Null + std::string[type] + std::string[data]
-            ret.emplace_back(czh::value::Null{});
-            ret.emplace_back(item.get_type());
-            ret.emplace_back(item.as_string());
-          }
-      }, r);
+      // Data -> std::string[type] + std::string[data]
+      ret.emplace_back(r.get_type());
+      ret.emplace_back(r.get_data());
     }
     return ret;
-  }
-  
-  template<typename To, typename From>
-  auto data_conv(From &&data)
-  {
-    if constexpr(std::is_same_v<std::decay_t<From>, Data>)
-    {
-      return data.template as<To>();
-    }
-    else
-    {
-      return std::forward<To>(data);
-    }
   }
   
   template<typename F, typename List, std::size_t... index>
   auto call_with_param_helper(const F &func, const MethodParam &v, std::index_sequence<index...>)
   {
     // convert param to a tuple
-    auto tmp = std::make_tuple(
-        std::get<
-            std::conditional_t<index_of_v<index_at_t<index, List>, MethodParamList> == -1,
-                Data,
-                index_at_t<index, List>
-            >>(v[index])...);
-    // convert Data in tmp to the actual CustomType in List
+    auto tmp = std::make_tuple(v[index]...);
+    // convert Data in tmp to the actual Type in List
     auto internal_args = std::apply([](auto &&... elems)
                                     {
-                                      return std::make_tuple(data_conv<index_at_t<index, List>>(elems)...);
+                                      return std::make_tuple(elems.template as<index_at_t<index, List>>()...);
                                     }, tmp);
     return func(std::get<index>(internal_args)...);
   }
@@ -290,9 +234,8 @@ namespace qwrpc::method
   auto make_index()
   {
     // CustomType -> -1
-    return std::vector<std::tuple<int, std::string>>{
+    return std::vector<std::string>{
         {
-            index_of_v<std::decay_t<Args>, MethodParamList>,
             std::string(qwrpc_type_id<std::decay_t<Args>>())
         }...};
   }
@@ -301,7 +244,7 @@ namespace qwrpc::method
   {
   private:
     std::function<MethodParam(MethodParam)> func;
-    std::vector<std::tuple<int, std::string>> args;
+    std::vector<std::string> args;
     std::string ret_type;
   public:
     Method() = default;
@@ -314,39 +257,27 @@ namespace qwrpc::method
     
     bool check_args(const czh::value::Array &call_args) const
     {
-      if (call_args.size() < args.size()) return false;
-      size_t j = 0;
-      for (size_t i = 0; i < args.size(); ++i, ++j)
+      if (call_args.size() % 2 != 0) return false;
+      if (call_args.size() / 2 != args.size()) return false;
+      for (size_t i = 0; i < args.size(); i++)
       {
-        // CustomType -> Data -> Null + std::string(type) + std::string(data), see above
-        // IOW, args{{-1, std::string}} -> call_args{Null, std::string, std::string}
-        auto&[index, name] = args[i];
-        if (index == -1)
+        if (call_args[i * 2].index() != czh::value::details::index_of_v<std::string, czh::value::details::BasicVTList>)
         {
-          if (j + 2 >= call_args.size()) return false;
-          auto null = std::get_if<czh::value::Null>(&call_args[j]);
-          auto type = std::get_if<std::string>(&call_args[j + 1]);
-          auto data = std::get_if<std::string>(&call_args[j + 2]);
-          if (null != nullptr && type != nullptr && data != nullptr && *type == name)
-          {
-            j += 2;
-            i += 1;
-            continue;
-          }
-          else
-          {
-            return false;
-          }
+          return false;
         }
-        else if (index != call_args[j].index() - 1)
+        if (call_args[i * 2 + 1].index() !=
+            czh::value::details::index_of_v<std::string, czh::value::details::BasicVTList>)
+        {
+          return false;
+        }
+        if (std::get<std::string>(call_args[i * 2]) != args[i])
         {
           return false;
         }
       }
-      if (j != call_args.size()) return false;
       return true;
     }
-    
+  
     bool check_ret(const std::string &ret) const
     {
       return ret == ret_type;
@@ -355,34 +286,10 @@ namespace qwrpc::method
     MethodParam call(const czh::value::Array &call_args) const
     {
       MethodParam internal_args;
-      bool find_null = false;
-      std::string type;
-      for (auto &r: call_args)
+      for (size_t i = 0; i < call_args.size(); i += 2)
       {
-        std::visit(overloaded{
-            [&internal_args](auto &&item) { internal_args.emplace_back(item); },
-            [&find_null](czh::value::Null) { find_null = true; },
-            [&internal_args, &find_null, &type](std::string str)
-            {
-              // Data -> Null + std::string(type) + std::string(data)
-              if (find_null)
-              {
-                if (type.empty())
-                {
-                  type = std::move(str);
-                  return;
-                }
-                Data data(std::move(str), type);
-                internal_args.emplace_back(std::move(data));
-                type.clear();
-                find_null = false;
-              }
-              else
-              {
-                internal_args.emplace_back(str);
-              }
-            }
-        }, r);
+        Data data(std::get<std::string>(call_args[i + 1]), std::get<std::string>(call_args[i]));
+        internal_args.emplace_back(std::move(data));
       }
       return func(std::move(internal_args));
     }
@@ -392,7 +299,7 @@ namespace qwrpc::method
       czh::value::Array ret;
       for (auto &r: args)
       {
-        ret.emplace_back(std::get<1>(r));
+        ret.emplace_back(r);
       }
       return ret;
     }

@@ -21,16 +21,23 @@ int main()
   // plus
   auto add_ret = cli.call<int>("plus", 1, 1);
   std::cout << "plus: " << add_ret << std::endl;
-  // great_func1
-  auto great1_ret = cli.call<qwrpc_example::D>("great_func1", qwrpc_example::C{1});
-  std::cout << "great_func1: " << great1_ret.d << std::endl;
-  // great_func2
-  auto great2_ret = cli.call<qwrpc_example::B>("great_func2", qwrpc_example::A{2});
-  std::cout << "great_func2: ";
-  great2_ret.print();
+  // foo1
+  auto foo1_ret = cli.call<qwrpc_example::D>("foo1", qwrpc_example::C{1});
+  std::cout << "foo1: " << foo1_ret.d << std::endl;
+  // foo2
+  auto foo2_ret = cli.call<std::vector<std::vector<qwrpc_example::C>>>("foo2",
+                                                                       std::vector<qwrpc_example::C>{
+                                                                           qwrpc_example::C{1}});
+  std::cout << "foo2: ";
+  for (auto &r: foo2_ret[0]) std::cout << r.c << " ";
+  std::cout << std::endl;
+  // foo3
+  auto foo3_ret = cli.call<std::vector<qwrpc_example::B>>("foo3", qwrpc_example::A{2});
+  std::cout << "foo3: ";
+  foo3_ret[0].print();
   // slow
-  auto slow_ret = cli.async_call<int>("slow");
+  auto slow_ret = cli.async_call<std::string>("slow", std::string(""));
   std::cout << "slow called." << std::endl;
-  std::cout << "slow returned " << slow_ret.get() << std::endl;
+  std::cout << "slow returned: " << slow_ret.get() << std::endl;
   return 0;
 }

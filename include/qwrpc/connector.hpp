@@ -262,7 +262,7 @@ namespace qwrpc::connector
   public:
     Server(int p, const std::function<void(const std::string &, std::string &)> &router_)
         : port(p), router(router_), thpool(16) {}
-    
+  
     void start()
     {
       Socket socket;
@@ -281,7 +281,7 @@ namespace qwrpc::connector
                 auto request = clnt_socket.recv();
                 if (request == "quit")
                 {
-                  return;
+                  break;
                 }
                 std::string response;
                 router(request, response);
