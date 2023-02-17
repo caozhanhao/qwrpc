@@ -39,5 +39,7 @@ int main()
   auto slow_ret = cli.async_call<std::string>("slow", std::string(""));
   std::cout << "slow called." << std::endl;
   std::cout << "slow returned: " << slow_ret.get() << std::endl;
+  //empty
+  cli.call<void>("empty");
   return 0;
 }

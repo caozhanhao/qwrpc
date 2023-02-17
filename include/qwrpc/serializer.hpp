@@ -32,7 +32,7 @@ namespace qwrpc::serializer
   namespace details
   {
     template<typename T>
-    constexpr bool is_serializable_single_type_v = std::is_trivially_copyable_v<T> | std::is_same_v<T, std::string>;
+    constexpr bool is_serializable_single_type_v = std::is_trivially_copyable_v<T> || std::is_same_v<T, std::string>;
     
     template<typename T>
     struct is_serializable;

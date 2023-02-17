@@ -54,6 +54,7 @@ int main()
                         std::this_thread::sleep_for(10s);
                         return a + " 10 seconds later";
                       });
+  svr.register_method("empty", [] {});
   svr.start();
   return 0;
 }

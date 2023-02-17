@@ -142,7 +142,14 @@ namespace qwrpc::method
     T as()
     {
       error::qwrpc_assert(qwrpc_type_id<T>() == type, "Get error type.");
-      return serializer::deserialize<T>(data);
+      if constexpr(std::is_same_v<T, void>)
+      {
+        return;
+      }
+      else
+      {
+        return serializer::deserialize<T>(data);
+      }
     }
   
     template<typename T>
@@ -166,6 +173,7 @@ namespace qwrpc::method
   
   czh::value::Array ret_to_czh_type(const MethodParam &param)
   {
+    if (param.empty()) return {};
     error::qwrpc_assert(param.size() == 1);
     czh::value::Array ret;
     ret.emplace_back(param[0].get_type());
@@ -185,6 +193,12 @@ namespace qwrpc::method
                         == czh::value::details::index_of_v<std::string,
         czh::value::details::BasicVTList>);
     return Data(std::get<std::string>(ret[1]), std::string(qwrpc_type_id<T>())).as<T>();
+  }
+  
+  template<>
+  void ret_get(const czh::value::Array &ret)
+  {
+    error::qwrpc_assert(ret.empty());
   }
   
   template<typename ...Args>
@@ -230,6 +244,26 @@ namespace qwrpc::method
     return ret;
   }
   
+  template<typename F, typename List, std::size_t... index>
+  void call_with_param_void_helper(const F &func, const MethodParam &v, std::index_sequence<index...>)
+  {
+    // convert param to a tuple
+    auto tmp = std::make_tuple(v[index]...);
+    // convert Data in tmp to the actual Type in List
+    auto internal_args = std::apply([](auto &&... elems)
+                                    {
+                                      return std::make_tuple(elems.template as<index_at_t<index, List>>()...);
+                                    }, tmp);
+    func(std::get<index>(internal_args)...);
+  }
+  
+  template<typename ...Args, typename F>
+  void call_with_param_void(F &&func, const MethodParam &v)
+  {
+    call_with_param_helper<F, TypeList<Args...>>
+        (std::forward<F>(func), v, std::make_index_sequence<sizeof...(Args)>());
+  }
+  
   template<typename ...Args>
   auto make_index()
   {
@@ -252,7 +286,18 @@ namespace qwrpc::method
     template<MethodArgRetType ...Args, MethodArgRetType Ret>
     Method(std::function<Ret(Args...)> f)
         :args(make_index<std::decay_t<Args>...>()),
-         func([f](MethodParam call_args) { return call_with_param<std::decay_t<Args>...>(f, call_args); }),
+         func([f](MethodParam call_args)
+              {
+                if constexpr(std::is_same_v<std::decay_t<Ret>, void>)
+                {
+                  call_with_param_void<std::decay_t<Args>...>(f, call_args);
+                  return MethodParam{};
+                }
+                else
+                {
+                  return call_with_param<std::decay_t<Args>...>(f, call_args);
+                }
+              }),
          ret_type(qwrpc_type_id<Ret>()) {}
     
     bool check_args(const czh::value::Array &call_args) const
