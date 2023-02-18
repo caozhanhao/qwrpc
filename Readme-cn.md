@@ -3,7 +3,7 @@ qwrpc
 </h2> 
 
 <p align="center">
-<strong>A easy-to-use Modern C++ header-only RPC library.</strong>
+<strong>一个易用的Modern C++ header-only RPC库.</strong>
 </p>
 
 <p align="center">
@@ -25,10 +25,10 @@ qwrpc
 </p>
 
 - Header only
-- Easy-to-use interface
-- Runtime type checking
+- 易用的接口
+- 运行时类型检查
 
-### A Simple Example
+### 一个简单的例子
 
 #### RpcServer
 
@@ -45,25 +45,24 @@ auto ret = cli.call<int>("plus", 1, 1);
 // or async_call<int>("plus", 1, 1);
 ```
 
-- `cli.call<T>` returns `T`
-- `cli.async_call<...>` returns a `std::future<T>`
+- `cli.call<T>` 返回 `T`
+- `cli.async_call<...>` 返回一个 `std::future<T>`
 
-### More
+### 更多
 
-#### Type Support
+#### 类型支持
 
-qwrpc supports
+qwrpc支持以下类型
 
-- any types that satisfied `std::is_trivially_copyable`
-- any types with specialization of serialize and deserialize(see below)
-- any containers(with begin(), end(), insert()) stores supported type.
+- 任何符合 `std::is_trivially_copyable` 的类型
+- 任何有serialize和deserialize特化的类型（见下方）
+- 任何存储已支持类型的容器(有 begin(), end(), insert())
 
-It's worth noting that the last rule above indicates that something like `std::vector<std::vector<...>>` is also
-supported.
+值得注意的是，上面第三个规则指出像`std::vector<std::vector<...>>`也是支持的
 
-If more types are needed, add specialization `qwrpc::serializer::serialize()` and `qwrpc::serializer::deserialize()`.
+如果还需要更多类型，添加`qwrpc::serializer::serialize()` 和 `qwrpc::serializer::deserialize()`的特化。
 
-- serialize and deserialize
+- serialize和deserialize
 
 ```c++
 namespace qwrpc::serializer
@@ -81,11 +80,11 @@ namespace qwrpc::serializer
 }
 ```
 
-#### Register
+#### 注册方法
 
-Any functions satisfied the following rule can be used directly.
+任何符合以下规则的函数都可以直接注册。
 
-- Parameters and return value is supported types.(see above)
+- 参数和返回值是已支持类型(见上方)
 
 ```c++
 svr.register_method("plus", std::plus<int>());
@@ -97,15 +96,16 @@ svr.register_method("foo",
                       });
 ```
 
-For more examples, please see [examples](examples/).
+更多例子请看[examples](examples/).
 
-#### Logger
+#### 日志
 
 init_logger(minimum severity, output mode, filename(opt))
+
 - minimum severity: NONE, TRACE, DEBUG, INFO, WARN, ERR, CRITICAL.
 - output mode: file, console, file_and_console, none
-- filename: Only when output mode is file or file_and_console, filename is need.
-- If you don't want logger, just don't use init_logger() or simply set output mode to none.
+- filename: 仅当output mode是file或者file_and_console的时候才需要filename。
+- 如果你不需要日志，只需要不使用init_logger()或者把output mode设为none
 
 ```c++
 qwrpc::logger::init_logger(qwrpc::logger::Severity::NONE,
@@ -113,20 +113,20 @@ qwrpc::logger::init_logger(qwrpc::logger::Severity::NONE,
                            "qwrpc_server_log.txt");
 ```
 
-### Dependencies
+### 依赖
 
 - [libczh](https://github.com/caozhanhao/libczh)
-- Requires C++ 20
+- 需要 C++ 20
 
-### Contact
+## 联系
 
-- If you have any questions or suggestions, please submit an issue or email me.
-- Email: cao2013zh at 163 dot com
+- 如果你有任何问题或建议，请提交一个issue或给我发邮件
+- 邮箱: cao2013zh at 163 dot com
 
-### Contribution
+## 贡献
 
-- Any contributions are welcomed, just send a PR.
+- 欢迎任何贡献，提一个PR就可以
 
-### License
+## 许可
 
-- qwrpc is licensed under the [Apache-2.0 license](LICENSE)
+- qwrpc 根据 [Apache-2.0 license](LICENSE)获得许可
