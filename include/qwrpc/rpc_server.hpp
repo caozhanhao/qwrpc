@@ -15,6 +15,7 @@
 #define QWRPC_RPC_SERVER_HPP
 #pragma once
 
+#include "logger.hpp"
 #include "error.hpp"
 #include "utils.hpp"
 #include "method.hpp"
@@ -50,49 +51,67 @@ namespace qwrpc::rpc_server
     RpcServer &register_method(const std::string &name, F &&m)
     {
       methods[name] = method::Method(std::function(std::forward<F>(m)));
+      logger::info(logger::no_fmt, "Method Register: ", name);
       return *this;
     }
     
     RpcServer &start()
     {
-      connector::Server svr(port, [this](const std::string &request, std::string &res)
+      connector::Server svr(port, [this](const connector::Req &request, connector::Res &res)
       {
+        logger::info(logger::no_fmt,
+                     "Received request from: ", request.get_ip(), ", request: ", request.get_content());
         czh::Node req;
         try
         {
-          czh::Czh parser(request, czh::InputMode::string);
+          czh::Czh parser(request.get_content(), czh::InputMode::string);
           req = parser.parse();
         }
         catch (czh::error::CzhError &err)
         {
-          res = utils::to_str({{"status",    "failed"},
-                               {"message",   error::rpc_server::invalid_request},
-                               {"czh_error", err.get_content()}});
+          res.set_content(utils::to_str({{"status",    "failed"},
+                                         {"message",   error::rpc_server::invalid_request},
+                                         {"czh_error", err.get_content()}}));
+          logger::warn(logger::no_fmt,
+                       "Respond to: ", request.get_ip(),
+                       ", response: ", res.get_content());
           return;
         }
         catch (czh::error::Error &err)
         {
-          res = utils::to_str({{"status",    "failed"},
-                               {"message",   error::rpc_server::invalid_request},
-                               {"czh_error", err.get_content()}});
+          res.set_content(utils::to_str({{"status",    "failed"},
+                                         {"message",   error::rpc_server::invalid_request},
+                                         {"czh_error", err.get_content()}}));
+          logger::warn(logger::no_fmt,
+                       "Respond to: ", request.get_ip(),
+                       ", response: ", res.get_content());
           return;
         }
         if (!req.has_node("id") && req["id"].is<std::string>())
         {
-          res = utils::to_str({{"status",  "failed"},
-                               {"message", error::rpc_server::invalid_method_id}});
+          res.set_content(utils::to_str({{"status",  "failed"},
+                                         {"message", error::rpc_server::invalid_method_id}}));
+          logger::warn(logger::no_fmt,
+                       "Respond to: ", request.get_ip(),
+                       ", response: ", res.get_content());
           return;
         }
         if (!req.has_node("args") && req["expected_ret"].is<std::string>())
         {
-          res = utils::to_str({{"status",  "failed"},
-                               {"message", error::rpc_server::invalid_expected_ret}});
+          res.set_content(utils::to_str({{"status",  "failed"},
+                                         {"message", error::rpc_server::invalid_expected_ret}}));
+          logger::warn(logger::no_fmt,
+                       "Respond to: ", request.get_ip(),
+                       ", response: ", res.get_content());
           return;
         }
         if (!req.has_node("args") && req["args"].is<czh::value::Array>())
         {
-          res = utils::to_str({{"status",  "failed"},
-                               {"message", error::rpc_server::invalid_argument}});
+          res.set_content(utils::to_str({{"status",  "failed"},
+                                         {"message", error::rpc_server::invalid_argument}}));
+          logger::warn(logger::no_fmt,
+                       "Respond to: ", request.get_ip(),
+                       ", response: ", res.get_content());
           return;
         }
         auto id = req["id"].get<std::string>();
@@ -100,22 +119,31 @@ namespace qwrpc::rpc_server
         auto method = methods.find(id);
         if (method == methods.end())
         {
-          res = utils::to_str({{"status",  "failed"},
-                               {"message", error::rpc_server::unknown_id}});
+          res.set_content(utils::to_str({{"status",  "failed"},
+                                         {"message", error::rpc_server::unknown_id}}));
+          logger::warn(logger::no_fmt,
+                       "Respond to: ", request.get_ip(),
+                       ", response: ", res.get_content());
           return;
         }
         if (!method->second.check_args(args))
         {
-          res = utils::to_str({{"status",        "failed"},
-                               {"message",       error::rpc_server::invalid_argument},
-                               {"expected_args", method->second.expected_args()}});
+          res.set_content(utils::to_str({{"status",        "failed"},
+                                         {"message",       error::rpc_server::invalid_argument},
+                                         {"expected_args", method->second.expected_args()}}));
+          logger::warn(logger::no_fmt,
+                       "Respond to: ", request.get_ip(),
+                       ", response: ", res.get_content());
           return;
         }
         if (!method->second.check_ret(req["expected_ret"].get<std::string>()))
         {
-          res = utils::to_str({{"status",       "failed"},
-                               {"message",      error::rpc_server::invalid_expected_ret},
-                               {"expected_ret", method->second.expected_ret()}});
+          res.set_content(utils::to_str({{"status",       "failed"},
+                                         {"message",      error::rpc_server::invalid_expected_ret},
+                                         {"expected_ret", method->second.expected_ret()}}));
+          logger::warn(logger::no_fmt,
+                       "Respond to: ", request.get_ip(),
+                       ", response: ", res.get_content());
           return;
         }
         method::MethodParam ret;
@@ -125,13 +153,19 @@ namespace qwrpc::rpc_server
         }
         catch (error::Error &err)
         {
-          res = utils::to_str({{"status",      "failed"},
-                               {"message",     error::rpc_server::invoke_error},
-                               {"qwrpc_error", err.get_content()}});
+          res.set_content(utils::to_str({{"status",      "failed"},
+                                         {"message",     error::rpc_server::invoke_error},
+                                         {"qwrpc_error", err.get_content()}}));
+          logger::warn(logger::no_fmt,
+                       "Respond to: ", request.get_ip(),
+                       ", response: ", res.get_content());
           return;
         }
-        res = utils::to_str({{"status", "success"},
-                             {"return", method::ret_to_czh_type(ret)}});
+        res.set_content(utils::to_str({{"status", "success"},
+                                       {"return", method::ret_to_czh_type(ret)}}));
+        logger::info(logger::no_fmt,
+                     "Respond to: ", request.get_ip(),
+                     ", response: ", res.get_content());
       });
       svr.start();
       return *this;

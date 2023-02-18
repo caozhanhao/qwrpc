@@ -52,6 +52,7 @@ namespace qwrpc::error::connector
   constexpr auto socket_connect_error = "socket connect error";
   constexpr auto socket_recv_error = "socket recv error";
   constexpr auto socket_send_error = "socket send_and_recv error";
+  constexpr auto socket_getpeername_error = "socket getpeername error";
 }
 namespace qwrpc::connector
 {
@@ -147,6 +148,9 @@ namespace qwrpc::connector
       std::memset(&addr, 0, sizeof(addr));
     }
     
+    Addr(struct sockaddr_in addr_, decltype(len) len_)
+        : addr(addr_), len(len_) {}
+    
     Addr(const std::string &ip, int port)
     {
       std::memset(&addr, 0, sizeof(addr));
@@ -154,6 +158,18 @@ namespace qwrpc::connector
       addr.sin_addr.s_addr = inet_addr(ip.c_str());
       addr.sin_port = htons(port);
       len = sizeof(addr);
+    }
+    
+    std::string to_string() const
+    {
+      std::string str(16, '\0');
+#ifdef _WIN32
+      str = inet_ntoa(addr.sin_addr);
+#else
+      inet_ntop(AF_INET, &addr.sin_addr, str.data(), len);
+#endif
+      str += ":" + std::to_string(ntohs(addr.sin_port));
+      return str;
     }
   };
   
@@ -250,6 +266,42 @@ namespace qwrpc::connector
       error::qwrpc_assert(::connect(fd, (sockaddr *) &addr.addr, addr.len) != -1,
                           error::connector::socket_connect_error);
     }
+    
+    Addr get_peer_addr() const
+    {
+      struct sockaddr_in peer_addr;
+      decltype(Addr::len) peer_len;
+      peer_len = sizeof(peer_addr);
+      error::qwrpc_assert(getpeername(fd, (struct sockaddr *) &peer_addr, &peer_len) != -1,
+                          error::connector::socket_getpeername_error);
+      return Addr(peer_addr, peer_len);
+    }
+  };
+  
+  class Req
+  {
+  private:
+    std::string ip;
+    std::string content;
+  public:
+    Req(const std::string &ip_, const std::string &content_)
+        : ip(ip_), content(content_) {}
+    
+    auto get_ip() const { return ip; }
+    
+    auto get_content() const { return content; }
+  };
+  
+  class Res
+  {
+  private:
+    std::string content;
+  public:
+    Res() = default;
+    
+    void set_content(const std::string c) { content = c; }
+    
+    auto get_content() const { return content; }
   };
   
   class Server
@@ -257,14 +309,15 @@ namespace qwrpc::connector
   private:
     int port;
     bool running;
-    std::function<void(const std::string &, std::string &)> router;
+    std::function<void(const Req &, Res &)> router;
     Thpool thpool;
   public:
-    Server(int p, const std::function<void(const std::string &, std::string &)> &router_)
-        : port(p), router(router_), thpool(16) {}
-  
+    Server(int p, const std::function<void(const Req &, Res &)> &router_)
+        : port(p), router(router_), thpool(16), running(false) {}
+    
     void start()
     {
+      running = true;
       Socket socket;
       socket.bind({"127.0.0.1", port});
       socket.listen();
@@ -283,9 +336,9 @@ namespace qwrpc::connector
                 {
                   break;
                 }
-                std::string response;
-                router(request, response);
-                clnt_socket.send(response);
+                Res response;
+                router(Req{clnt_socket.get_peer_addr().to_string(), request}, response);
+                clnt_socket.send(response.get_content());
               }
             });
       }

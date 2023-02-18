@@ -88,6 +88,20 @@ svr.register_method("foo",
 
 For more examples, please see [examples](examples/).
 
+#### Logger
+
+- init_logger(minimum severity, output mode, filename(opt))
+- minimum severity: NONE, TRACE, DEBUG, INFO, WARN, ERR, CRITICAL.
+- output mode: file, console, file_and_console, none
+- filename: Only when output mode is file or file_and_console, filename is need.
+- If you don't want logger, just don't use init_logger() or simply set output mode to none.
+
+```c++
+qwrpc::logger::init_logger(qwrpc::logger::Severity::NONE,
+                           qwrpc::logger::Output::file_and_console,
+                           "qwrpc_server_log.txt");
+```
+
 ### Dependencies
 
 - [libczh](https://github.com/caozhanhao/libczh)

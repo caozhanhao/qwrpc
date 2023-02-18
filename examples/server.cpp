@@ -20,6 +20,10 @@ using namespace std::chrono_literals;
 
 int main()
 {
+  // If you don't need log, just remove this statement
+  qwrpc::logger::init_logger(qwrpc::logger::Severity::NONE,
+                             qwrpc::logger::Output::file_and_console,
+                             "qwrpc_server_log.txt");
   qwrpc::RpcServer svr(8765);
   // Some functions can be used directly
   svr.register_method("plus", std::plus<int>());
