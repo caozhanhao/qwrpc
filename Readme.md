@@ -47,10 +47,12 @@ qwrpc supports
 
 - any types that satisfied `std::is_trivially_copyable`
 - any types with specialization of serialize and deserialize(see below)
-- any containers(with begin(), end(), insert()) whose value's type is supported types above
+- any containers(with begin(), end(), insert()) stores supported type.
 
-Rule 3 means something like `std::vector<std::vector<int>>` is also supported. If more types are needed, add
-specialization `qwrpc::serializer::serialize()` and `qwrpc::serializer::deserialize()`
+It's worth noting that the last rule above indicates that something like `std::vector<std::vector<...>>` is also
+supported.
+
+If more types are needed, add specialization `qwrpc::serializer::serialize()` and `qwrpc::serializer::deserialize()`.
 
 - serialize and deserialize
 
@@ -74,7 +76,7 @@ namespace qwrpc::serializer
 
 Any functions satisfied the following rule can be used directly.
 
-- Parameters and return value is the supported types.(see above)
+- Parameters and return value is supported types.(see above)
 
 ```c++
 svr.register_method("plus", std::plus<int>());
@@ -90,7 +92,7 @@ For more examples, please see [examples](examples/).
 
 #### Logger
 
-- init_logger(minimum severity, output mode, filename(opt))
+init_logger(minimum severity, output mode, filename(opt))
 - minimum severity: NONE, TRACE, DEBUG, INFO, WARN, ERR, CRITICAL.
 - output mode: file, console, file_and_console, none
 - filename: Only when output mode is file or file_and_console, filename is need.
