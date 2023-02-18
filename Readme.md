@@ -16,10 +16,10 @@ qwrpc
 </p>
 
 <p align="center">
-  <a href="README.md" >
+  <a href="Readme.md" >
     <img src="https://img.shields.io/badge/Document-English-blue" alt="Document" />  
   </a>
-  <a href="README-cn.md" >
+  <a href="Readme-cn.md" >
     <img src="https://img.shields.io/badge/文档-简体中文-blue" alt="Document" />  
   </a>
 </p>
