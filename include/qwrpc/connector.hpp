@@ -160,6 +160,15 @@ namespace qwrpc::connector
       len = sizeof(addr);
     }
     
+    Addr(int port)
+    {
+      std::memset(&addr, 0, sizeof(addr));
+      addr.sin_family = AF_INET;
+      addr.sin_addr.s_addr = INADDR_ANY;
+      addr.sin_port = htons(port);
+      len = sizeof(addr);
+    }
+    
     std::string to_string() const
     {
       std::string str(16, '\0');
@@ -178,10 +187,11 @@ namespace qwrpc::connector
   {
   private:
 #ifdef _WIN32
-    SOCKET fd;
+    using Socket_t = SOCKET;
 #else
-    int fd;
+    using Socket_t = int;
 #endif
+    Socket_t fd;
   public:
     Socket() : fd(-1)
     {
@@ -190,14 +200,8 @@ namespace qwrpc::connector
       setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<char *>(&on), sizeof(on));
       error::qwrpc_assert(fd != -1, error::connector::socket_init_error);
     }
-
-#ifdef _WIN32
-    Socket(SOCKET fd_) : fd(fd_) {}
-#else
     
-    Socket(int fd_) : fd(fd_) {}
-
-#endif
+    Socket(Socket_t fd_) : fd(fd_) {}
     
     Socket(const Socket &) = delete;
     
@@ -319,7 +323,7 @@ namespace qwrpc::connector
     {
       running = true;
       Socket socket;
-      socket.bind({"127.0.0.1", port});
+      socket.bind({port});
       socket.listen();
       while (running)
       {
