@@ -166,11 +166,18 @@ namespace qwrpc::logger
     {
       min_severity = min_severity_;
       mode = mode_;
-      os = std::make_unique<std::ofstream>(filename);
-      error::qwrpc_assert(os->is_open(), "Open log file failed");
+      if (filename != "")
+      {
+        os = std::make_unique<std::ofstream>(filename);
+        error::qwrpc_assert(os->is_open(), "Open log file failed");
+      }
+      else
+      {
+        os = nullptr;
+      }
     }
-    
-    
+  
+  
     void add(const Record &record)
     {
       if (record.get_severity() < min_severity) return;
